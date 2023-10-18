@@ -39,6 +39,8 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
 
 2. **Download the Singularity containers**
   ```bash
+  mkdir -p containers
+
   singularity pull --dir containers XXX
   singularity pull --dir containers docker://kishwars/pepper_deepvariant:r0.8
   singularity pull --dir containers docker://kishwars/pepper_deepvariant:r0.7
@@ -57,6 +59,7 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
 - Download the models from [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
 - Decompress the PMDV models:
 ```
+mkdir -p pmdv/r07/models/ratatosk_r9_guppy5_sup
 tar -xvzf R9_GUPPY_SUP_MODELS.tar.gz -C pmdv/r07/models/ratatosk_r9_guppy5_sup
 ```
 
