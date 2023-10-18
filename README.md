@@ -93,7 +93,7 @@ nextflow run -profile cluster Emblask.nf \
 If the input proband long read coverage exceeds 50x, an estimate of the genome size (in bp) to assemble must be provided with `--genome_size`, e.g `--genome_size 3100000000` for a human sample.
 
 **Optional**:
-- **--max-lr-bq**: Maximum base quality of the input long reads to correct. Default is 40.
+- **--max-lr-bq**: Maximum base quality of the input long reads to assemble. Default is 40.
 
 Alternatively, one can avoid using command line arguments by editing the parameter file `params.yaml` instead. Once the file is edited, the pipeline can be run with the following command:
 ```bash
