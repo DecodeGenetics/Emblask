@@ -84,11 +84,11 @@ nextflow run -profile cluster Emblask.nf \
 ### Pipeline arguments
 
 **Mandatory**:
-- `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM format.
-- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM format.
+- `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM.
+- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM.
   **!!! If in FASTQ format, it must be an interleaved FASTQ file !!!**.
-- `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the the sample to assemble in FASTQ or BAM format.
-- `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the the sample to assemble in FASTQ or BAM format.
+- `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the sample to assemble in FASTQ or BAM.
+- `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the sample to assemble in FASTQ or BAM.
 - `--out_dir`: Output directory.
 
 If the input proband long read coverage exceeds 50x, an estimate of the genome size (in bp) to assemble must be provided with `--genome_size`, e.g `--genome_size 3100000000` for a human sample.
