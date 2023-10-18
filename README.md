@@ -12,15 +12,15 @@ The pipeline has been designed exclusively for ONT R9.4 and Illumina data. ONT R
 
 The pipeline takes as input trio data: long and short reads for the genome to assemble **plus** short reads for the parents.
 
-Minimum coverage:
-* **Proband**: 20x ONT R9.4 **and** 30x Illumina
-* **Paternal**: 20x Illumina
-* **Maternal**: 20x Illumina
+**Minimum coverage**:
+* Proband: 20x ONT R9.4 **and** 30x Illumina
+* Paternal: 20x Illumina
+* Maternal: 20x Illumina
 
-Recommended coverage:
-* **Proband**: 40x ONT R9.4 **and** 40x Illumina
-* **Paternal**: 30x Illumina
-* **Maternal**: 30x Illumina
+**Recommended coverage**:
+* Proband: 40x ONT R9.4 **and** 40x Illumina
+* Paternal: 30x Illumina
+* Maternal: 30x Illumina
 
 Output genome assembly quality, completeness, N50 and switch error rate are dependent on the input read coverage, N50 and error rate.
 
@@ -31,13 +31,13 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
 * [Nextflow](https://www.nextflow.io/)
 * [Singularity](https://apptainer.org/)
 
-1. Clone the repository
+1. **Clone the repository**
   ```bash
   git clone https://github.com/XXX/XXX.git
   cd XXX
   ```
 
-2. Download the Singularity containers
+2. **Download the Singularity containers**
   ```bash
   singularity pull --dir containers XXX
   singularity pull --dir containers docker://kishwars/pepper_deepvariant:r0.8
@@ -52,7 +52,7 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
   # pepper_deepvariant_r0.8.sif
   ```
 
-3. Download the Ratatosk-specific models PMDV r0.7
+3. **Download the Ratatosk-specific models PMDV r0.7**
 
 - Download the models from [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
 - Decompress the PMDV models:
@@ -83,16 +83,17 @@ nextflow run -profile cluster Emblask.nf \
 
 ### Pipeline arguments
 
-The following are mandatory:
-- **--proband_lr_fq_in** or **--proband_lr_bam_in**: Long reads from the sample to assemble in FASTQ or BAM format.
-- **--proband_sr_fq_in** or **--proband_sr_bam_in**: Short reads from the sample to assemble in FASTQ or BAM format. **If in FASTQ format, it must be an interleaved FASTQ file**.
-- **--father_sr_fq_in** or **--father_sr_bam_in**: Short reads from the father of the the sample to assemble in FASTQ or BAM format.
-- **--mother_sr_fq_in** or **--mother_sr_bam_in**: Short reads from the mother of the the sample to assemble in FASTQ or BAM format.
-- **--out_dir**: Output directory.
+**Mandatory**:
+- `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM format.
+- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM format.
+  **!!! If in FASTQ format, it must be an interleaved FASTQ file !!!**.
+- `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the the sample to assemble in FASTQ or BAM format.
+- `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the the sample to assemble in FASTQ or BAM format.
+- `--out_dir`: Output directory.
 
 If the input proband long read coverage exceeds 50x, an estimate of the genome size (in bp) to assemble must be provided with `--genome_size`, e.g `--genome_size 3100000000` for a human sample.
 
-The following are optional:
+**Optional**:
 - **--max-lr-bq**: Maximum base quality of the input long reads to correct. Default is 40.
 
 Alternatively, one can avoid using command line arguments by editing the parameter file `params.yaml` instead. Once the file is edited, the pipeline can be run with the following command:
@@ -109,8 +110,8 @@ By default, `Emblask.nf` will run jobs on SLURM. You can use the workload manage
 Nextflow supports a wide variety of workload managers and cloud systems: SLURM, SGE, LSF, AWS, Google Cloud, etc. See the [Nextflow executor documentation](https://www.nextflow.io/docs/latest/executor.html) for more information.
 
 The pipeline uses 3 profiles of nodes:
-- **small_node**: 32 cores, 2GB of RAM per core. Mostly used for decompressing/filtering/splitting FASTQ files, extracting reads from BAM files, etc.
-- **medium_node**: 32 cores, 4GB of RAM per core. Used for long and short reads mapping, variant calling, phasing, etc.
+- **small_node**: 32 cores, 2GB of RAM per core. Used for manipulating FASTQ and BAM files.
+- **medium_node**: 32 cores, 4GB of RAM per core. Used for reads mapping, variant calling, phasing, etc.
 - **large_node**: 64 cores, 6GB of RAM per core. Used by compute-intensive and memory-consuming jobs such as sequence assembly with Flye.
 
 These profiles can be edited in `nextflow.config` to fit your cluster configuration. Keep in mind that jobs with the **large_node** profile are very CPU, RAM and IO demanding so it is important to give **large_node** your "best" node specs.
