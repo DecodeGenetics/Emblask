@@ -88,7 +88,7 @@ nextflow run -profile cluster Emblask.nf \
 
 **Mandatory**:
 - `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM.
-- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**.
+- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**
 - `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the sample to assemble in FASTQ or BAM.
 - `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the sample to assemble in FASTQ or BAM.
 - `--out_dir`: Output directory.
