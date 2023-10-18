@@ -85,8 +85,7 @@ nextflow run -profile cluster Emblask.nf \
 
 **Mandatory**:
 - `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM.
-- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM.
-  **!!! If in FASTQ format, it must be an interleaved FASTQ file !!!**.
+- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**.
 - `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the sample to assemble in FASTQ or BAM.
 - `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the sample to assemble in FASTQ or BAM.
 - `--out_dir`: Output directory.
@@ -112,6 +111,6 @@ Nextflow supports a wide variety of workload managers and cloud systems: SLURM, 
 The pipeline uses 3 profiles of nodes:
 - **small_node**: 32 cores, 2GB of RAM per core. Used for manipulating FASTQ and BAM files.
 - **medium_node**: 32 cores, 4GB of RAM per core. Used for reads mapping, variant calling, phasing, etc.
-- **large_node**: 64 cores, 6GB of RAM per core. Used by compute-intensive and memory-consuming jobs such as sequence assembly with Flye.
+- **large_node**: 64 cores, 6GB of RAM per core. Used by compute-intensive and memory-consuming jobs such as sequence assembly.
 
 These profiles can be edited in `nextflow.config` to fit your cluster configuration. Keep in mind that jobs with the **large_node** profile are very CPU, RAM and IO demanding so it is important to give **large_node** your "best" node specs.
