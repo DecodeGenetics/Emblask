@@ -1,0 +1,34 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# From SWIG
+*_wrap.cxx
+graph.py
+
+# Other
+*.pyc
+*.dot
+*.graph
+*.out
+*.swp
+*~
+\#*
+.\#*
+build/
+CB_Project/
+old/
+debug/
+*.dSYM/*
+core
+
+

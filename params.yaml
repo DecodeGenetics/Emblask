@@ -1,0 +1,37 @@
+### PIPELINE INPUT ###
+
+proband_lr_bam_in: ""
+proband_lr_fq_in: ""
+
+proband_sr_bam_in: ""
+proband_sr_fq_in: "" # IMPORTANT: This MUST be an interleaved FASTQ file!
+
+father_sr_bam_in: ""
+father_sr_fq_in: ""
+
+mother_sr_bam_in: ""
+mother_sr_fq_in: ""
+
+out_dir: ""
+
+# Size of the genome to assemble in bp for long reads subsampling, e.g. 3100000000 for human
+# Only use if input long read coverage is >50x
+# Default value is -1 (no subsampling)
+genome_size: -1
+
+# Maximum base quality of the input long reads
+# This pipeline is designed for ONT R9.4 long reads for which the maximum base quality SHOULD be 40
+# However, ONT R10 long read data seems to use a maximum base quality of 90
+max_lr_bq: 40
+
+### PIPELINE CONFIG ###
+
+# This pipeline uses default models trained on ONT R9.4 long reads corrected with Illumina for Pepper-Margin-DeepVariant r0.7
+# These models are assumed to be available by default in pmdv/r07/models/ratatosk_r9_guppy5_sup
+# However, it is possible to supply here your own models which will override the default ones
+# Make sure to leave empty in order to use the default models
+pmdv_r07_model_r9_guppy5_sup_snp: ""
+pmdv_r07_model_r9_guppy5_sup_hp: ""
+pmdv_r07_model_r9_guppy5_sup_dv: ""
+
+
