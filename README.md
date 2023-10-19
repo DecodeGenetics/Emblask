@@ -54,9 +54,9 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
   # pepper_deepvariant_r0.8.sif
   ```
 
-3. **Download the Ratatosk-specific models PMDV r0.7**
+3. **Download the Ratatosk-specific models for PMDV r0.7**
 
-- Download the models from [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
+- Download the models [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
 - Decompress the PMDV models:
 ```
 mkdir -p pmdv/r07/models/ratatosk_r9_guppy5_sup
