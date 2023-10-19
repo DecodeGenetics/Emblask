@@ -447,7 +447,7 @@ process hapResAsm_polish1_1 {
 
 	python \${filter_align_py} -t ${task.cpus} -i lr.asm.minCovLen.bam -o lr.asm.minCovLen.tmp.bam -l ${params.pipeline.min_len_alignment} \
 	-e ${params.pipeline.assembly.max_error_rate.lenient} -m ${params.pipeline.min_mapq.strict}
-	mv -f lr.asm.minCovLen.tmp.bam lr.asm.minCovLen.ba
+	mv -f lr.asm.minCovLen.tmp.bam lr.asm.minCovLen.bam
 	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.bam
 
 	\${samtools} depth -@ ${task.cpus} -aa -J -G ${params.pipeline.samtools.depth.filter_supp_sec} lr.asm.minCovLen.bam | \
