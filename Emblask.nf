@@ -395,7 +395,7 @@ process hapResAsm_filter {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}')
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y ${asm_fa} ${lr_fq_gz} > lr.asm.sam
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq_gz} > lr.asm.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.bam
@@ -437,7 +437,7 @@ process hapResAsm_polish1_1 {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}')
 
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y ${asm_fa} ${lr_fq_gz} > lr.asm.minCovLen.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq_gz} > lr.asm.minCovLen.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.minCovLen.sam > lr.asm.minCovLen.bam
 	if [ ! -s lr.asm.minCovLen.bam ]; then echo \"File lr.asm.minCovLen.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.minCovLen.bam
@@ -530,7 +530,7 @@ process hapResAsm_polish1_2 {
 	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.splitPS.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.splitPS.bed
 
 	\${samtools} bam2fq -@ ${task.cpus} -n lr.asm.minCovLen.filtered.2.bam | \${pigz} -p ${task.cpus} -c > lr.asm.minCovLen.filtered.2.fq.gz
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y assembly.filtered.splitPS.fasta lr.asm.minCovLen.filtered.2.fq.gz > lr.asm.minCovLen.splitPS.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.filtered.splitPS.fasta | cut -f1) assembly.filtered.splitPS.fasta lr.asm.minCovLen.filtered.2.fq.gz > lr.asm.minCovLen.splitPS.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.minCovLen.splitPS.sam > lr.asm.minCovLen.splitPS.bam
 	if [ ! -s lr.asm.minCovLen.splitPS.bam ]; then echo \"File lr.asm.minCovLen.splitPS.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.minCovLen.splitPS.bam
@@ -618,7 +618,7 @@ process hapResAsm_polish2 {
 	\${samtools} faidx polished_1.fasta
 	awk '{print \$1 \"\\t0\\t\" \$2}' polished_1.fasta.fai | sort -k1,1 -k2,2n > polished_1.bed
 	\${samtools} bam2fq -@ ${task.cpus} -n ../MARGIN_PHASED.haplotagged.polish.bam | \${pigz} -p ${task.cpus} -c > MARGIN_PHASED.haplotagged.polish.fastq.gz
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y polished_1.fasta MARGIN_PHASED.haplotagged.polish.fastq.gz > lr.asm.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG polished_1.fasta | cut -f1) polished_1.fasta MARGIN_PHASED.haplotagged.polish.fastq.gz > lr.asm.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.bam
@@ -635,7 +635,7 @@ process hapResAsm_polish2 {
 	
 	mkdir ref-to-ref-map; cd ref-to-ref-map
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} ../polished_1.filtered.fasta ../polished_1.filtered.fasta > ref2ref.sam
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} -I \$(du -L -BG ../polished_1.filtered.fasta | cut -f1) ../polished_1.filtered.fasta ../polished_1.filtered.fasta > ref2ref.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M ref2ref.sam > ref2ref.bam
 	if [ ! -s ref2ref.bam ]; then echo \"File ref2ref.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck ref2ref.bam
@@ -677,7 +677,7 @@ process hapResAsmPolish_phase_mapFilter {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}')
 
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y ${asm_fa} ${lr_fq_gz} > lr.asm.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq_gz} > lr.asm.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.bam
@@ -910,7 +910,7 @@ process hapResAsmPolish_trioBin {
 	cat hap_bin.conf.1.binned.list <(join hap_bin.conf.1.unbinned.list hap_bin.unconf.list | awk '{print \$1 \"\\t\" \$4 \"\\t\" \$3}') | sort -k1,1 > hap_bin.conf.2.all.list;
 
 	mkdir -p hap2mixed; cd hap2mixed;
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} ../../mixhap_asm.fasta ../../hapres_asm.fasta > asm_hap2mixed.sam;
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} -I \$(du -L -BG ../../mixhap_asm.fasta | cut -f1) ../../mixhap_asm.fasta ../../hapres_asm.fasta > asm_hap2mixed.sam;
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M asm_hap2mixed.sam > asm_hap2mixed.bam;
 	if [ ! -s asm_hap2mixed.bam ]; then echo \"File asm_hap2mixed.bam does not exist or is empty\" 1>&2; exit 1; fi;
 	\${samtools} quickcheck asm_hap2mixed.bam;
@@ -1165,7 +1165,8 @@ process hapResAsmPolish_polishDualAsm_1 {
 
 		if [ \${HAP_A} -eq 2 ]; then HAP_B=1; fi
 
-		\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} h\${HAP_B}.assembly.filtered.fasta h\${HAP_A}.assembly.filtered.fasta > h\${HAP_A}_map2_h\${HAP_B}.sam
+		\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} -I \$(du -L -BG h\${HAP_B}.assembly.filtered.fasta | cut -f1) \
+		h\${HAP_B}.assembly.filtered.fasta h\${HAP_A}.assembly.filtered.fasta > h\${HAP_A}_map2_h\${HAP_B}.sam
 		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M h\${HAP_A}_map2_h\${HAP_B}.sam > h\${HAP_A}_map2_h\${HAP_B}.bam
 		if [ ! -s h\${HAP_A}_map2_h\${HAP_B}.bam ]; then echo \"File h\${HAP_A}_map2_h\${HAP_B}.bam does not exist or is empty\" 1>&2; exit 1; fi
 		\${samtools} quickcheck h\${HAP_A}_map2_h\${HAP_B}.bam
@@ -1178,7 +1179,8 @@ process hapResAsmPolish_polishDualAsm_1 {
 		join h\${HAP_A}_map2_h\${HAP_B}.high_sim.list h\${HAP_A}.assembly.filtered.bed > h\${HAP_A}_map2_h\${HAP_B}.high_sim.bed
 		rm -rf h\${HAP_A}_map2_h\${HAP_B}.bam*
 
-		\${minimap2} -t ${task.cpus} -ax map-hifi -Y h\${HAP_A}.assembly.filtered.fasta h\${HAP_A}.nodup.fastq.gz > lr.h\${HAP_A}.sam
+		\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG h\${HAP_A}.assembly.filtered.fasta | cut -f1) \
+		h\${HAP_A}.assembly.filtered.fasta h\${HAP_A}.nodup.fastq.gz > lr.h\${HAP_A}.sam
 		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.h\${HAP_A}.sam > lr.h\${HAP_A}.bam
 		if [ ! -s lr.h\${HAP_A}.bam ]; then echo \"File lr.h\${HAP_A}.bam does not exist or is empty\" 1>&2; exit 1; fi
 		\${samtools} quickcheck lr.h\${HAP_A}.bam
@@ -1197,7 +1199,7 @@ process hapResAsmPolish_polishDualAsm_1 {
 	\${samtools} faidx assembly.filtered.fasta
 	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.bed
 
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I 6G assembly.filtered.fasta lr.filtered.fq.gz > lr.asm.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.filtered.fasta | cut -f1) assembly.filtered.fasta lr.filtered.fq.gz > lr.asm.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.bam
