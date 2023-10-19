@@ -1222,6 +1222,7 @@ process hapResAsmPolish_polishDualAsm_2 {
 	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
+	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 	seqtk=\${SEQTK:-${params.tools.seqtk.bin}}
 
 	polish_snp_py=\${POLISH_SNP_PY:-${params.python.polish_snp}}
