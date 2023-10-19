@@ -111,7 +111,7 @@ By default, `Emblask.nf` will run jobs on SLURM. You can use the workload manage
 
 Nextflow supports a wide variety of workload managers and cloud systems: SLURM, SGE, LSF, AWS, Google Cloud, etc. See the [Nextflow executor documentation](https://www.nextflow.io/docs/latest/executor.html) for more information.
 
-The pipeline uses 3 profiles of nodes:
+The pipeline uses 3 node profiles with default requirements:
 - **small_node**: 32 cores, 2GB of RAM per core. Used for manipulating FASTQ and BAM files.
 - **medium_node**: 32 cores, 4GB of RAM per core. Used for reads mapping, variant calling, phasing, etc.
 - **large_node**: 64 cores, 6GB of RAM per core. Used by compute-intensive and memory-consuming jobs such as sequence assembly.
