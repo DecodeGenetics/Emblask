@@ -19,7 +19,7 @@ process mapLRtoAsm {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y asm.fasta ${lr_fq} > lr.asm.sam;
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG asm.fasta | cut -f1) asm.fasta ${lr_fq} > lr.asm.sam;
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam;
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi;
 	\${samtools} quickcheck lr.asm.bam;
@@ -205,8 +205,6 @@ process mapPairedIllumina {
 	script:
 
 		def keepAllSecondary_opt = (keepSecondary == true) ? "--secondary=yes" : ''
-		def file_sz_rdnp_up = asm_fa.size() + 999999999 // Size of reference file in bytes + 999999 bytes
-		def minimap2_idx_sz = file_sz_rdnp_up.intdiv(1000000000) // Size of the index as a multiple of 1GB (rounded up)
 
 		"""
 		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -215,7 +213,7 @@ process mapPairedIllumina {
 		TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1) # Get total RAM allocated to job in GB
 		MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}') # Compute RAM available per core in MB
 
-		\${minimap2} -t ${task.cpus} -ax sr -Y -I ${minimap2_idx_sz}G ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.sam # Map long reads back to assembly
+		\${minimap2} -t ${task.cpus} -ax sr -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.sam # Map long reads back to assembly
 		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M -o sr.bam sr.sam # Create BAM file from sorted SAM
 		if [ ! -s sr.bam ]; then echo \"File sr.bam does not exist or is empty\" 1>&2; exit 1; fi;
 		\${samtools} quickcheck sr.bam; # Run file truncation check on resulting BAM file
