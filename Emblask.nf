@@ -1392,5 +1392,5 @@ workflow {
 	// Merge the Illumina chunks to one single BAM file
 	sr_dual_asm_chunks_bam_merged = mergePairedIlluminaBAM_polish(sr_dual_asm_chunks_bam_split.bam.collect(), sr_dual_asm_chunks_bam_split.bam_bai.collect())
 
-	final_dual_asm = hapResAsmPolish_polishDualAsm_3(dual_asm_final_2, sr_dual_asm_chunks_bam_merged)
+	final_dual_asm = hapResAsmPolish_polishDualAsm_3(dual_asm_polishSNP, sr_dual_asm_chunks_bam_merged)
 }
