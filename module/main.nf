@@ -215,7 +215,7 @@ process mapPairedIllumina {
 		TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1) # Get total RAM allocated to job in GB
 		MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}') # Compute RAM available per core in MB
 
-		\${minimap2} -t ${task.cpus} -ax sr -Y -I ${minimap2_idx_sz} ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.sam # Map long reads back to assembly
+		\${minimap2} -t ${task.cpus} -ax sr -Y -I ${minimap2_idx_sz}G ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.sam # Map long reads back to assembly
 		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M -o sr.bam sr.sam # Create BAM file from sorted SAM
 		if [ ! -s sr.bam ]; then echo \"File sr.bam does not exist or is empty\" 1>&2; exit 1; fi;
 		\${samtools} quickcheck sr.bam; # Run file truncation check on resulting BAM file
