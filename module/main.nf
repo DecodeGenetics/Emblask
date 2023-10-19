@@ -230,8 +230,8 @@ process mergePairedIlluminaBAM {
 	label 'medium_node'
 
 	input:
-		path("*.bam")
-		path("*.bam.bai")
+		path("?????????.bam")
+		path("?????????.bam.bai")
 
 	output:
 		tuple path('sr.asm.bam'), path('sr.asm.bam.bai')
