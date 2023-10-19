@@ -205,8 +205,8 @@ process mapPairedIllumina {
 	script:
 
 		def keepAllSecondary_opt = (keepSecondary == true) ? "--secondary=yes" : ''
-		def file_sz_rdnp_up = asm_fa.size() + 999999 // Size of reference file in bytes + 999999 bytes
-		def minimap2_idx_sz = file_sz_rdnp_up.intdiv(1000000) // Size of the index as a multiple of 1GB (rounded up)
+		def file_sz_rdnp_up = asm_fa.size() + 999999999 // Size of reference file in bytes + 999999 bytes
+		def minimap2_idx_sz = file_sz_rdnp_up.intdiv(1000000000) // Size of the index as a multiple of 1GB (rounded up)
 
 		"""
 		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
