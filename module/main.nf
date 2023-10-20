@@ -4,7 +4,7 @@ process mapLRtoAsm {
 
 	input:
 		path lr_fq
-		tuple path('asm.fasta'), path('asm.fasta.fai'), path('asm.bed')
+		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 
 	output:
 		tuple path('lr.asm.bam'), path('lr.asm.bam.bai'), emit: bam
@@ -19,7 +19,7 @@ process mapLRtoAsm {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG asm.fasta | cut -f1) asm.fasta ${lr_fq} > lr.asm.sam;
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq} > lr.asm.sam;
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam;
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi;
 	\${samtools} quickcheck lr.asm.bam;
@@ -194,11 +194,11 @@ process mapPairedIllumina {
 	label 'medium_node'
 
 	input:
-		tuple path('sr_fq'), path('asm_fa'), path('asm_fai'), path('asm_bed')
+		tuple path(sr_fq), path(asm_fa), path(asm_fai), path(asm_bed)
 		val keepSecondary // true or false (whether we want the alignment to keep all secondary alignments)
 
 	output:
-		tuple path('sr.bam'), path('sr.bam.bai')
+		tuple path("sr.${task.process}.bam"), path("sr.${task.process}.bam.bai")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -213,13 +213,13 @@ process mapPairedIllumina {
 		TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1) # Get total RAM allocated to job in GB
 		MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}') # Compute RAM available per core in MB
 
-		\${minimap2} -t ${task.cpus} -ax sr -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.sam # Map long reads back to assembly
-		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M -o sr.bam sr.sam # Create BAM file from sorted SAM
-		if [ ! -s sr.bam ]; then echo \"File sr.bam does not exist or is empty\" 1>&2; exit 1; fi;
-		\${samtools} quickcheck sr.bam; # Run file truncation check on resulting BAM file
-		if [ ! \$? -eq 0 ]; then echo \"File sr.bam is malformed\" 1>&2; exit 1; fi;
-		\${samtools} index -@ ${task.cpus} sr.bam;
-		rm -rf sr.sam;
+		\${minimap2} -t ${task.cpus} -ax sr -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${keepAllSecondary_opt} ${asm_fa} ${sr_fq} > sr.${task.process}.sam # Map long reads back to assembly
+		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M -o sr.${task.process}.bam sr.${task.process}.sam # Create BAM file from sorted SAM
+		if [ ! -s sr.${task.process}.bam ]; then echo \"File sr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi
+		\${samtools} quickcheck sr.${task.process}.bam # Run file truncation check on resulting BAM file
+		if [ ! \$? -eq 0 ]; then echo \"File sr.${task.process}.bam is malformed\" 1>&2; exit 1; fi
+		\${samtools} index -@ ${task.cpus} sr.${task.process}.bam
+		rm -rf sr.${task.process}.sam
 		"""
 }
 
@@ -232,18 +232,18 @@ process mergePairedIlluminaBAM {
 		path("?????????.bam.bai")
 
 	output:
-		tuple path('sr.asm.bam'), path('sr.asm.bam.bai')
+		tuple path("sr.${task.process}.bam"), path("sr.${task.process}.bam.bai")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 
-	\${samtools} merge -@ ${task.cpus} -o sr.asm.bam *.bam; # Merge the BAM files
-	if [ ! -s sr.asm.bam ]; then echo \"File sr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi;
-	\${samtools} quickcheck sr.asm.bam; # Run file truncation check on resulting BAM file
-	if [ ! \$? -eq 0 ]; then echo \"File sr.asm.bam is malformed\" 1>&2; exit 1; fi;
-	\${samtools} index -@ ${task.cpus} sr.asm.bam;
+	\${samtools} merge -@ ${task.cpus} -o sr.${task.process}.bam *.bam # Merge the BAM files
+	if [ ! -s sr.${task.process}.bam ]; then echo \"File sr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi
+	\${samtools} quickcheck sr.${task.process}.bam # Run file truncation check on resulting BAM file
+	if [ ! \$? -eq 0 ]; then echo \"File sr.${task.process}.bam is malformed\" 1>&2; exit 1; fi
+	\${samtools} index -@ ${task.cpus} sr.${task.process}.bam
 	"""
 }
 
