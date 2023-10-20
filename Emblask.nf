@@ -2,19 +2,19 @@
 
 nextflow.enable.dsl=2
 
-include { mapLRtoAsm as mapLRtoAsm_1; mapLRtoAsm as mapLRtoAsm_2 } from 'module/main.nf'
-include { var_CallFilterPhase as var_CallFilterPhase_1; var_CallFilterPhase as var_CallFilterPhase_2 } from 'module/main.nf'
-include { varCall_hifi as hapResAsmPolish_phase_varCall } from 'module/main.nf'
-include { varCall_ontR9_trainedModels as mixHapAsm_filter_call; varCall_ontR9_trainedModels as hapResAsmPolish_polishDualAsm_call } from 'module/main.nf'
-include { varPhase as mixHapAsm_filter_phase; varPhase as hapResAsmPolish_phase_varPhase1; varPhase as hapResAsmPolish_phase_varPhase2 } from 'module/main.nf'
-include { mapPairedIllumina as mapPairedIllumina_correct; mapPairedIllumina as mapPairedIllumina_polish } from 'module/main.nf'
-include { mergePairedIlluminaBAM as mergePairedIlluminaBAM_correct; mergePairedIlluminaBAM as mergePairedIlluminaBAM_polish } from 'module/main.nf'
+include { mapLRtoAsm as mapLRtoAsm_1; mapLRtoAsm as mapLRtoAsm_2 } from './module/main.nf'
+include { var_CallFilterPhase as var_CallFilterPhase_1; var_CallFilterPhase as var_CallFilterPhase_2 } from './module/main.nf'
+include { varCall_hifi as hapResAsmPolish_phase_varCall } from './module/main.nf'
+include { varCall_ontR9_trainedModels as mixHapAsm_filter_call; varCall_ontR9_trainedModels as hapResAsmPolish_polishDualAsm_call } from './module/main.nf'
+include { varPhase as mixHapAsm_filter_phase; varPhase as hapResAsmPolish_phase_varPhase1; varPhase as hapResAsmPolish_phase_varPhase2 } from './module/main.nf'
+include { mapPairedIllumina as mapPairedIllumina_correct; mapPairedIllumina as mapPairedIllumina_polish } from './module/main.nf'
+include { mergePairedIlluminaBAM as mergePairedIlluminaBAM_correct; mergePairedIlluminaBAM as mergePairedIlluminaBAM_polish } from './module/main.nf'
 
 /*
 Basic quality filtering on corrected ONT reads stored in FASTQ or BAM.
 By default, the script detects and removes windows >= 100 bp for which >90% of the bases have QUAL<=5.
 Hence N50 of the filtered reads is decreased but quality is increased.
-Output reads are compressed
+Output reads are compressed.
 */
 process filterONT {
 
@@ -25,7 +25,7 @@ process filterONT {
 		path fastq_in
 
 	output:
-		path 'reads.filtered.fq.gz'
+		path "lr.${task.process}.fq.gz"
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -40,10 +40,10 @@ process filterONT {
 
 			MAX_BQ=\$(bc -l <<< \"${params.pipeline.fastq_filter.min_baseq_ratio} * ${params.max_lr_bq}\" | awk '{printf(\"%.0f\", \$0)}') 
 
-			\${samtools} bam2fq -n -@ ${task.cpus} ${bam_in} | \${pigz} -p ${task.cpus} -c > reads.fq.gz;
-			python \${filter_fastq_py} -f reads.fq.gz -t ${task.cpus} -c 1000 -l ${params.pipeline.min_len_read} -b \${MAX_BQ} \
+			\${samtools} bam2fq -n -@ ${task.cpus} ${bam_in} | \${pigz} -p ${task.cpus} -c > lr.fq.gz;
+			python \${filter_fastq_py} -f lr.fq.gz -t ${task.cpus} -c 1000 -l ${params.pipeline.min_len_read} -b \${MAX_BQ} \
 			-w ${params.pipeline.fastq_filter.len_window_baseq_filter} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter} | \
-			\${pigz} -p ${task.cpus} -c > reads.filtered.fq.gz;
+			\${pigz} -p ${task.cpus} -c > lr.${task.process}.fq.gz;
 			rm -rf reads.fq.gz;
 			"""
 		}
@@ -57,15 +57,15 @@ process filterONT {
 
 			python \${filter_fastq_py} -f ${fastq_in} -t ${task.cpus} -c 1000 -l ${params.pipeline.min_len_read} -b \${MAX_BQ} \
 			-w ${params.pipeline.fastq_filter.len_window_baseq_filter} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter} | \
-			\${pigz} -p ${task.cpus} -c > reads.filtered.fq.gz;
+			\${pigz} -p ${task.cpus} -c > lr.${task.process}.fq.gz;
 			"""
 		}
 		else error("No corrected reads in BAM or FASTQ format provided in input")
 }
 
 /*
-Extract Illumina reads from a BAM file (not in pairs).
-Build k=31 de Bruijn graph and index from Illumina reads.
+Extract (unpaired) Illumina reads from a BAM file.
+Build k=31 de Bruijn graph and Bifrost index from Illumina reads.
 Compress output.
 */
 process extractIllumina_buildDBG {
@@ -76,7 +76,7 @@ process extractIllumina_buildDBG {
 		tuple val(trio_member), path(bam_in), path(fastq_in) // trio_member can be 'proband', 'father' or 'mother'
 
 	output:
-		tuple path("${trio_member}.fq.gz"), path("${trio_member}.gfa.gz"), path("${trio_member}.bfi")
+		tuple path("sr.${trio_member}.${task.process}.fq.gz"), path("dbg.${trio_member}.${task.process}.gfa.gz"), path("dbg.${trio_member}.${task.process}.bfi")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -87,16 +87,16 @@ process extractIllumina_buildDBG {
 			samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 			bifrost=\${BIFROST:-${params.tools.bifrost.bin}}
 
-			\${samtools} fastq -@ ${task.cpus} -o ${trio_member}.fq.gz ${bam_in};
-			\${bifrost} build -v -k 31 -t ${task.cpus} -s ${trio_member}.fq.gz -o ${trio_member};
+			\${samtools} fastq -@ ${task.cpus} -o sr.${trio_member}.${task.process}.fq.gz ${bam_in};
+			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${trio_member}.${task.process}.fq.gz -o dbg.${trio_member}.${task.process};
 			"""
 		}
 		else if (fastq_in) {
 			"""
 			bifrost=\${BIFROST:-${params.tools.bifrost.bin}}
 
-			ln -s ${fastq_in} ${trio_member}.fq.gz
-			\${bifrost} build -v -k 31 -t ${task.cpus} -s ${trio_member}.fq.gz -o ${trio_member};
+			ln -s ${fastq_in} sr.${trio_member}.${task.process}.fq.gz
+			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${trio_member}.fq.gz -o dbg.${trio_member}.${task.process};
 			"""
 		}
 		else error("No corrected reads in BAM or FASTQ format provided in input")
@@ -114,19 +114,20 @@ process extractPairedIllumina {
 		path(sr_bam_in)
 
 	output:
-		path "sr.fq.gz"
+		path "sr.${task.process}.fq.gz"
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 
-	\${samtools} collate -@ ${task.cpus} -u -O -n 128 ${sr_bam_in} /tmp/collate | \${samtools} fastq -o sr.fq.gz -;
+	\${samtools} collate -@ ${task.cpus} -u -O -n 128 ${sr_bam_in} /tmp/collate | \${samtools} fastq -o sr.${task.process}.fq.gz -;
 	"""
 }
 
 /*
-Split a compressed FASTQ file of Illumina reads into uncompressed chunks of equal number of lines.
+Split a compressed FASTQ file of Illumina reads into uncompressed chunks of
+80M lines or 10M pairs.
 */
 process splitPairedIllumina {
 
@@ -136,18 +137,22 @@ process splitPairedIllumina {
 		path sr_fq
 
 	output:
-		path "sr.fq.part_*"
+		path "sr.${task.process}.fq.part_*"
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
-	// Split paired short read file into chunks of 80M lines (or 10M pairs)
 	"""
 	pigz=\${PIGZ_BIN:-${params.tools.pigz.bin}}
 
-	\${pigz} -p ${task.cpus} -d -c ${sr_fq} | split -l 80000000 -d - sr.fq.part_;
+	\${pigz} -p ${task.cpus} -d -c ${sr_fq} | split -l 80000000 -d - sr.${task.process}.fq.part_;
 	"""
 }
 
+/*
+Create a mixed-haplotype assembly with scaffolds from the proband's corrected long reads
+using subsampling if coverage is too high. Change assembly multi-lines FASTA to single-lines
+FASTA. Index FASTA and create BED file of contigs. Remove tmp files.
+*/
 process mixHapAsm {
 
 	label 'large_node'
@@ -156,7 +161,7 @@ process mixHapAsm {
 		path filtered_lr_fq
 
 	output:
-		tuple path('assembly.fasta'), path('assembly.fasta.fai'), path('assembly.bed')
+		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -173,15 +178,22 @@ process mixHapAsm {
 	ASM_COMPLETED=\$({ grep \"INFO: Final assembly\" <(tail -n 50 flye.log) || true; } | wc -l);
 	if [ \${ASM_COMPLETED} -eq 0 ] || [ ! -s assembly.fasta ]; then echo \"Flye log incomplete or empty assembly\" 1>&2; exit 1; fi;
 
-	\${seqkit} seq -w0 assembly.fasta > assembly.tmp.fasta
-	mv -f assembly.tmp.fasta assembly.fasta
-	\${samtools} faidx assembly.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.fasta.fai | sort -k1,1 -k2,2n > assembly.bed
+	\${seqkit} seq -w0 assembly.fasta > asm.${task.process}.fasta
+	\${samtools} faidx asm.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 
-	rm -rf 00-assembly 10-consensus 20-repeat 30-contigger 40-polishing;
+	rm -rf assembly.fasta 00-assembly 10-consensus 20-repeat 30-contigger 40-polishing;
 	"""
 }
 
+/*
+Filter the mixed-haplotype assembly using the haplotagged remapping of proband's corrected long reads to it.
+Create BED file of contigs with low coverage (less than 60% of mean assembly coverage).
+List low coverage contigs with less than 2 "good quality" heterozygous variants.
+List low coverage contigs for which the phase coverage is highly unbalanced (H1 or H2 coverage >= 80% of contig coverage).
+Any contig falling in one of the 2 previous categories is flagged as a potential haplotig (haploid contig) and is removed
+from the mixed-haplotype assembly.
+*/
 process mixHapAsm_filter {
 
 	label 'medium_node'
@@ -193,7 +205,7 @@ process mixHapAsm_filter {
 		path asm_cov
 
 	output:
-		tuple path('assembly.no_haplotig.fasta'), path('assembly.no_haplotig.fasta.fai'), path('assembly.no_haplotig.bed')
+		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -206,15 +218,6 @@ process mixHapAsm_filter {
 
 	MEAN_COV=\$(tail -n 1 ${asm_cov} | cut -f3)
 	head -n -1 ${asm_cov} | awk -v meancov=\$MEAN_COV '{if (\$3<0.6*meancov) {print \$1}}' > lr.asm.low_cov.list
-	\${bcftools} query -i \"(FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & (AD>=${params.pipeline.variant_filter.min_ad}) & \
-	(VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" -f '%CHROM\\n' lr.asm.vcf.gz | sort | uniq -c > pepper.var.count
-
-	while read CONTIG_NAME
-	do
-		VARIANT_COUNT=\$(awk -v contig=\"\${CONTIG_NAME}\" '{if (\$2==contig) {print \$1}}' pepper.var.count)
-		if [ -z \${VARIANT_COUNT} ] || [ \${VARIANT_COUNT} -lt 2 ]; then echo -e \"\${CONTIG_NAME}\"; fi
-
-	done < lr.asm.low_cov.list > haplotig.1.list
 
 	while read CONTIG_NAME
 	do
@@ -222,19 +225,33 @@ process mixHapAsm_filter {
 
 	done < lr.asm.low_cov.list > lr.asm.low_cov.bed
 
+	\${bcftools} query -i \"(FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & (AD>=${params.pipeline.variant_filter.min_ad}) & \
+	(VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" -f '%CHROM\\n' lr.asm.vcf.gz | sort | uniq -c > pepper.var.count
+
+	while read CONTIG_NAME
+	do
+		VARIANT_COUNT=\$(awk -v contig=\"\${CONTIG_NAME}\" '{if (\$2==contig) {print \$1}}' pepper.var.count)
+
+		if [ -z \${VARIANT_COUNT} ] || [ \${VARIANT_COUNT} -lt 2 ]; then echo -e \"\${CONTIG_NAME}\"; fi
+
+	done < lr.asm.low_cov.list > haplotig.low_het_var_count.list
+
 	python \${get_phase_cov_py} -t ${task.cpus} -b lr.asm.hap.bam -m ${params.pipeline.min_mapq.strict} -r lr.asm.low_cov.bed > MARGIN_PHASED.haplotagged.cov.list
-	awk '{COV=\$4+\$5+\$6; COV_THRESHOLD=0.8*COV; if ((\$5>=COV_THRESHOLD) || (\$6>=COV_THRESHOLD)) {print \$1}}' MARGIN_PHASED.haplotagged.cov.list > haplotig.2.list
-	cat haplotig.1.list haplotig.2.list | sort | uniq > haplotigs.list; comm -23 <(awk '{print \$1}' asm.bed | sort -k1,1) haplotigs.list > contig.collapsed.list
-	\${seqtk} subseq asm.fasta contig.collapsed.list > assembly.no_haplotig.fasta
-	\${samtools} faidx assembly.no_haplotig.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.no_haplotig.fasta.fai | sort -k1,1 -k2,2n > assembly.no_haplotig.bed
+	awk '{COV=\$4+\$5+\$6; COV_THRESHOLD=0.8*COV; if ((\$5>=COV_THRESHOLD) || (\$6>=COV_THRESHOLD)) {print \$1}}' MARGIN_PHASED.haplotagged.cov.list > haplotig.unbalanced_phase.list
+	cat haplotig.low_het_var_count.list haplotig.unbalanced_phase.list | sort | uniq > haplotigs.list; comm -23 <(awk '{print \$1}' asm.bed | sort -k1,1) haplotigs.list > contig.collapsed.list
+	\${seqtk} subseq asm.fasta contig.collapsed.list > asm.${task.process}.fasta
+	\${samtools} faidx asm.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 	"""
 }
 
+/*
+Prepare local correction:
+First, a BED file of high coverage (hc) regions and low-medium coverage (lmc) regions is created. Regions are max 200kb.
+Later, each job will process 2Mbp worth of hc-lmc regions so hc and lmc BED files are split accordingly.
+This process makes the assumption that less than 10 billion jobs will be used (:D) so  all files IDs are encoded using 9 digits
+*/
 process prepLocalCorrection  {
-
-	// This process makes the assumption that less than 10 billion jobs will be used :)
-	// Hence, all files IDs are encoded using 9 digits
 
 	label 'medium_node'
 
@@ -255,9 +272,11 @@ process prepLocalCorrection  {
 
 	mkdir -p split
 	bash \${local_ratatosk_sh} -t ${task.cpus} -c -l lr.bam -s sr.bam -o lr.corrected
+
 	cat <(sed 's/\$/\\t1/' lr.corrected.hc.bed) <(sed 's/\$/\\t2/' lr.corrected.lmc.bed) | sort -k1,1 -k2,2n | \
 	awk 'BEGIN {SUM=0; ID=0; FS=\"\\t\"; OFS=\"\\t\"} {print \$1,\$2,\$3,\$4,ID,\"lr.corrected.\" ID \".bed\"; SUM+=\$3-\$2; \
 	if (SUM>=${params.pipeline.correction.job_len_region}) {ID+=1; SUM=0;}}' > lr.corrected.split.bed
+
 	cd split
 	awk '{print>>\$6}' ../lr.corrected.split.bed
 	ID_MAX=\$(tail -n 1 ../lr.corrected.split.bed | awk '{print \$5}')
@@ -266,21 +285,27 @@ process prepLocalCorrection  {
 	for i in \$(seq 0 \${ID_MAX})
 	do
 		ID_JOB=\$(printf \"%09d\" \$i)
+
 		awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"} {if (\$4==1){print \$1,\$2,\$3}}' lr.corrected.\${i}.bed > lr.corrected.\${ID_JOB}.hc.bed
 		awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"} {if (\$4==2){print \$1,\$2,\$3}}' lr.corrected.\${i}.bed > lr.corrected.\${ID_JOB}.lmc.bed
+
 		rm -rf lr.corrected.\${i}.bed
+
 		\${bedtools} merge -i <(cat lr.corrected.\${ID_JOB}.hc.bed lr.corrected.\${ID_JOB}.lmc.bed | sort -k1,1 -k2,2n) > lr.corrected.\${ID_JOB}.bed
 		join ../lr.corrected.dict <(cut -f1 lr.corrected.\${ID_JOB}.bed | sort | uniq) | awk '{print \$1 \"\\t\" \$2}' > lr.corrected.\${ID_JOB}.dict
 	done
 	"""
 }
 
+/*
+Performs localized long read correction with short reads using successive calls to Ratatosk with increasing k on segments of 200kb.
+Output is compressed.
+*/
 process localCorrection  {
 
 	label 'medium_node'
 
 	input:
-		//tuple val(id), path('in.lr.corr.bed'), path('in.lr.corr.dict'), path('in.lr.corr.hc.bed'), path('in.lr.corr.lmc.bed')
 		tuple val(id), path("*")
 		tuple path('lr.bam'), path('lr.bam.bai')
 		tuple path('sr.bam'), path('sr.bam.bai')
@@ -310,6 +335,11 @@ process localCorrection  {
 	"""
 }
 
+/*
+Merge locally corrected long reads into one file with no duplicates (duplicate should not occur but better be safe than sorry).
+Add unampped reads (left globally-corrected but not locally-corrected) to the file.
+Compress output.
+*/
 process mergeLocalCorrection {
 
 	label 'medium_node'
@@ -339,6 +369,11 @@ process mergeLocalCorrection {
 	"""
 }
 
+/*
+Create a haplotype-resolved assembly with scaffolds from the proband's globally & locally corrected
+long reads using subsampling if coverage is too high. Change assembly multi-lines FASTA to single-lines
+FASTA. Index FASTA and create BED file of contigs. Remove tmp files.
+*/
 process hapResAsm {
 
 	label 'large_node'
@@ -347,7 +382,7 @@ process hapResAsm {
 		path filtered_lr_fq_gz
 
 	output:
-		tuple path('assembly.fasta'), path('assembly.fasta.fai'), path('assembly.bed')
+		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -364,16 +399,17 @@ process hapResAsm {
 	ASM_COMPLETED=\$( { grep \"INFO: Final assembly\" <(tail -n 50 flye.log) || true; } | wc -l)
 	if [ \${ASM_COMPLETED} -eq 0 ] || [ ! -s assembly.fasta ]; then echo \"Flye log incomplete or empty assembly\" 1>&2; exit 1; fi
 
-	\${seqkit} seq -w0 assembly.fasta > assembly.tmp.fasta;
-	mv -f assembly.tmp.fasta assembly.fasta;
+	\${seqkit} seq -w0 assembly.fasta > asm.${task.process}.fasta;
+	\${samtools} faidx asm.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 
-	\${samtools} faidx assembly.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.fasta.fai | sort -k1,1 -k2,2n > assembly.bed
-
-	rm -rf 00-assembly 10-consensus 20-repeat 30-contigger 40-polishing
+	rm -rf assembly.fasta 00-assembly 10-consensus 20-repeat 30-contigger 40-polishing
 	"""
 }
 
+/*
+Filter out haplotigs from the haplotype-resolved assembly which are either too short or too low coverage
+*/
 process hapResAsm_filter {
 
 	label 'medium_node'
@@ -383,7 +419,7 @@ process hapResAsm_filter {
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 
 	output:
-		tuple path('assembly.filtered.fasta'), path('assembly.filtered.fasta.fai'), path('assembly.filtered.bed')
+		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -406,12 +442,24 @@ process hapResAsm_filter {
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} {if (\$3>=${params.pipeline.variant_filter.min_depth}) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else \
 	{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
 	END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.filtered.bed
-	\${seqtk} subseq assembly.fasta lr.asm.filtered.bed | tr ':' '_' > assembly.filtered.fasta
-	\${samtools} faidx assembly.filtered.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.bed
+
+	\${seqtk} subseq assembly.fasta lr.asm.filtered.bed | tr ':' '_' > asm.${task.process}.fasta
+	\${samtools} faidx asm.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 	"""
 }
 
+/*
+First polishing applied to filtered haplotype-resolved assembly of globally & locally corrected long reads (gllr)
+First, gllr are mapped back to the assembly. A script filter the alignments, removing alignments with low MAPQ,
+high error rates or short alignment length if mapping quality is not 60.
+Using the filtered BAM file, coverage from primary alignments (P) and then primary+supplementary alignments (PS) is
+computed per haplotig. A given haplotig is removed if PS-P>=2*P.
+Using the mean read coverage COV on the mixed-haplotype assembly, we define a first set a lenient coverage boundaries
+[0.5*(COV/2), 1.5*COV] and remove haplotigs outside of this coverage range.
+Then using a coverage range of [0.75*COV, 1.25*COV] on the remaining haplotigs, we define a list of haplotigs which are
+potentially collapsed (only one of the 2 haplotypes exist in the assembly or haplotig is homozygous for locus).
+*/
 process hapResAsm_polish1_1 {
 
 	label 'medium_node'
@@ -419,12 +467,11 @@ process hapResAsm_polish1_1 {
 	input:
 		path lr_fq_gz
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
-		tuple path('lr.bam'), path('lr.bam.bai')
 		path lr_cov
 
 	output:
-		tuple path('lr.asm.minCovLen.filtered.2.bam'), path('lr.asm.minCovLen.filtered.2.bam.bai'), emit: bam
-		path 'lr.asm.minCovLen.filtered.2.collapsed.bed', emit: bed
+		tuple path("lr.asm.${task.process}.bam"), path("lr.asm.${task.process}.bam.bai"), emit: bam
+		path "lr.asm.${task.process}.collapsed.bed", emit: bed
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -437,65 +484,77 @@ process hapResAsm_polish1_1 {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}')
 
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq_gz} > lr.asm.minCovLen.sam
-	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.minCovLen.sam > lr.asm.minCovLen.bam
-	if [ ! -s lr.asm.minCovLen.bam ]; then echo \"File lr.asm.minCovLen.bam does not exist or is empty\" 1>&2; exit 1; fi
-	\${samtools} quickcheck lr.asm.minCovLen.bam
-	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.minCovLen.bam is malformed\" 1>&2; exit 1; fi
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.bam
-	rm -rf lr.asm.minCovLen.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq_gz} > lr.asm.sam
+	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
+	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
+	\${samtools} quickcheck lr.asm.bam
+	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.bam is malformed\" 1>&2; exit 1; fi
+	\${samtools} index -@ ${task.cpus} lr.asm.bam
+	rm -rf lr.asm.sam
 
-	python \${filter_align_py} -t ${task.cpus} -i lr.asm.minCovLen.bam -o lr.asm.minCovLen.tmp.bam -l ${params.pipeline.min_len_alignment} \
+	python \${filter_align_py} -t ${task.cpus} -i lr.asm.bam -o lr.asm.tmp.bam -l ${params.pipeline.min_len_alignment} \
 	-e ${params.pipeline.assembly.max_error_rate.lenient} -m ${params.pipeline.min_mapq.strict}
-	mv -f lr.asm.minCovLen.tmp.bam lr.asm.minCovLen.bam
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.bam
+	mv -f lr.asm.tmp.bam lr.asm.bam
+	\${samtools} index -@ ${task.cpus} lr.asm.bam
 
-	\${samtools} depth -@ ${task.cpus} -aa -J -G ${params.pipeline.samtools.depth.filter_supp_sec} lr.asm.minCovLen.bam | \
+	\${samtools} depth -@ ${task.cpus} -aa -J -G ${params.pipeline.samtools.depth.filter_supp_sec} lr.asm.bam | \
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; SUM=0; COUNT=0;} \
 	{if (\$1!=CONTIG) {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}; CONTIG=\$1; SUM=0; COUNT=0}; SUM+=\$3; COUNT+=1} \
-	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}}' | sort -k1,1 > lr.asm.minCovLen.prim.cov;
-	\${samtools} depth -@ ${task.cpus} -aa -J -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.minCovLen.bam | \
+	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}}' | sort -k1,1 > lr.asm.prim.cov
+
+	\${samtools} depth -@ ${task.cpus} -aa -J -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.bam | \
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; SUM=0; COUNT=0;} \
 	{if (\$1!=CONTIG) {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}; CONTIG=\$1; SUM=0; COUNT=0}; SUM+=\$3; COUNT+=1} \
-	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}}' | sort -k1,1 > lr.asm.minCovLen.primsup.cov;
-	join lr.asm.minCovLen.prim.cov lr.asm.minCovLen.primsup.cov | awk '{if ((\$3-\$2)<(2*\$2)){print \$1}}' > lr.asm.keep.1.list;
-	join lr.asm.keep.1.list <(sort -k1,1 ${asm_bed}) | sort -k1,1 -k2,2n > lr.asm.keep.1.bed;
-	\${samtools} view -@ ${task.cpus} -b -M -L lr.asm.keep.1.bed lr.asm.minCovLen.bam > lr.asm.minCovLen.filtered.1.bam;
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.filtered.1.bam;
+	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, MEAN}}' | sort -k1,1 > lr.asm.primsup.cov
 
-	COV=\$(tail -n 1 ${lr_cov} | awk '{printf(\"%.0f\\n\", \$3)}');
-	COLLAPSED_COV_MIN=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.lower_bound.strict}*\$0)}');
-	COLLAPSED_COV_MAX=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.upper_bound.strict}*\$0)}');
-	SUPER_COV_MIN=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.lower_bound.lenient}*(\$0/2))}');
-	SUPER_COV_MAX=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.upper_bound.lenient}*\$0)}');
+	join lr.asm.prim.cov lr.asm.primsup.cov | awk '{if ((\$3-\$2)<(2*\$2)){print \$1}}' > lr.asm.keep.1.list
+	join lr.asm.keep.1.list <(sort -k1,1 ${asm_bed}) | sort -k1,1 -k2,2n > lr.asm.keep.1.bed
 
-	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.minCovLen.filtered.1.bam | \
+	\${samtools} view -@ ${task.cpus} -b -M -L lr.asm.keep.1.bed lr.asm.bam > lr.asm.filtered.bam
+	\${samtools} index -@ ${task.cpus} lr.asm.filtered.bam
+
+	COV=\$(tail -n 1 ${lr_cov} | awk '{printf(\"%.0f\\n\", \$3)}')
+	COLLAPSED_COV_MIN=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.lower_bound.strict}*\$0)}')
+	COLLAPSED_COV_MAX=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.upper_bound.strict}*\$0)}')
+	SUPER_COV_MIN=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.lower_bound.lenient}*(\$0/2))}')
+	SUPER_COV_MAX=\$(echo -e \"\${COV}\" | awk '{printf(\"%.0f\\n\", ${params.pipeline.ratio_cov.upper_bound.lenient}*\$0)}')
+
+	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.filtered.bam | \
 	awk -v sup_min_cov=\${SUPER_COV_MIN} -v sup_max_cov=\${SUPER_COV_MAX} 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} \
 	{if ((\$3>=sup_min_cov) && (\$3<=sup_max_cov)) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else { if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
-	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.keep.2.bed;
-	\${samtools} view -@ ${task.cpus} -b -M -L lr.asm.keep.2.bed lr.asm.minCovLen.filtered.1.bam > lr.asm.minCovLen.filtered.2.bam;
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.filtered.2.bam;
-	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.minCovLen.filtered.2.bam | \
+	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.keep.2.bed
+
+	\${samtools} view -@ ${task.cpus} -b -M -L lr.asm.keep.2.bed lr.asm.filtered.bam > lr.asm.${task.process}.bam
+	\${samtools} index -@ ${task.cpus} lr.asm.${task.process}.bam
+
+	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.${task.process}.bam | \
 	awk -v min_cov=\${COLLAPSED_COV_MIN} -v max_cov=\${COLLAPSED_COV_MAX} 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} \
 	{if ((\$3>=min_cov) && (\$3<=max_cov)) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else { if (POS_S!=-1) {print CONTIG, (POS_S-1) , (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
-	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.minCovLen.filtered.2.collapsed.bed;
+	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.${task.process}.collapsed.bed
 	"""
 }
 
+/*
+Split the haplotigs where the phasing is inconsistent using the MARGIN phasing output.
+Remap gllr to split haplotigs.
+A script filter the alignments, removing alignments with low MAPQ, high error rates or short alignment length if mapping quality is not 60.
+Then using a coverage range of [0.75*COV, 1.25*COV] on the remaining haplotigs, we define a list of haplotigs which are
+potentially collapsed (for a given locus, only one of the 2 haplotypes exist in the assembly or haplotig is homozygous).
+*/
 process hapResAsm_polish1_2 {
 
 	label 'medium_node'
 
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
-		tuple path('lr.asm.minCovLen.filtered.2.bam'), path('lr.asm.minCovLen.filtered.2.bam.bai')
+		tuple path('lr.asm.bam'), path('lr.asm.bam.bai')
 		path 'MARGIN_PHASED.phaseset.bed'
 		path lr_cov
 
 	output:
-		tuple path('assembly.filtered.splitPS.fasta'), path('assembly.filtered.splitPS.fasta.fai'), path('assembly.filtered.splitPS.bed'), emit: asm
-		tuple path('lr.asm.minCovLen.splitPS.bam'), path('lr.asm.minCovLen.splitPS.bam.bai'), emit: bam
-		path 'lr.asm.minCovLen.splitPS.collapsed.bed', emit: bed
+		tuple path("assembly.${task.process}.splitPS.fasta"), path("assembly.${task.process}.splitPS.fasta.fai"), path("assembly.${task.process}.splitPS.bed"), emit: asm
+		tuple path("lr.asm.${task.process}.splitPS.bam"), path("lr.asm.${task.process}.splitPS.bam.bai"), emit: bam
+		path "lr.asm.${task.process}.splitPS.collapsed.bed", emit: bed
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -524,31 +583,43 @@ process hapResAsm_polish1_2 {
 	{if (\$1!=CHROM){if (CHROM!=\"\"){print CHROM, SPOS, EPOS_CONTIG}; CHROM=\$1; SPOS=0; EPOS=\$3; EPOS_CONTIG=\$5} else \
 	{EPOS+=int((\$2-EPOS)/2); print CHROM, SPOS, EPOS; CHROM=\$1; SPOS=EPOS; EPOS=\$3; EPOS_CONTIG=\$5}} \
 	END {if (CHROM!=\"\"){print CHROM, SPOS, EPOS_CONTIG}}' > MARGIN_PHASED.phaseset.inconsistent.split.bed
+
 	cat <(\${seqtk} subseq ${asm_fa} MARGIN_PHASED.phaseset.consistent.list) <(\${seqtk} subseq ${asm_fa} MARGIN_PHASED.phaseset.inconsistent.split.bed) | \
-	awk '{if (NR%2==1){print \">contig_\" ID; ID+=1} else {print \$0}}' > assembly.filtered.splitPS.fasta
-	\${samtools} faidx assembly.filtered.splitPS.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.splitPS.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.splitPS.bed
+	awk '{if (NR%2==1){print \">contig_\" ID; ID+=1} else {print \$0}}' > assembly.${task.process}.splitPS.fasta
+	\${samtools} faidx assembly.${task.process}.splitPS.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.${task.process}.splitPS.fasta.fai | sort -k1,1 -k2,2n > assembly.${task.process}.splitPS.bed
 
-	\${samtools} bam2fq -@ ${task.cpus} -n lr.asm.minCovLen.filtered.2.bam | \${pigz} -p ${task.cpus} -c > lr.asm.minCovLen.filtered.2.fq.gz
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.filtered.splitPS.fasta | cut -f1) assembly.filtered.splitPS.fasta lr.asm.minCovLen.filtered.2.fq.gz > lr.asm.minCovLen.splitPS.sam
-	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.minCovLen.splitPS.sam > lr.asm.minCovLen.splitPS.bam
-	if [ ! -s lr.asm.minCovLen.splitPS.bam ]; then echo \"File lr.asm.minCovLen.splitPS.bam does not exist or is empty\" 1>&2; exit 1; fi
-	\${samtools} quickcheck lr.asm.minCovLen.splitPS.bam
-	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.minCovLen.splitPS.bam is malformed\" 1>&2; exit 1; fi
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.splitPS.bam
-	rm -rf lr.asm.minCovLen.splitPS.sam lr.asm.minCovLen.filtered.2.fq.gz
+	\${samtools} bam2fq -@ ${task.cpus} -n lr.asm.bam | \${pigz} -p ${task.cpus} -c > lr.asm.fq.gz
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.${task.process}.splitPS.fasta | cut -f1) assembly.${task.process}.splitPS.fasta lr.asm.fq.gz > lr.asm.${task.process}.splitPS.sam
+	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.${task.process}.splitPS.sam > lr.asm.${task.process}.splitPS.bam
+	if [ ! -s lr.asm.${task.process}.splitPS.bam ]; then echo \"File lr.asm.${task.process}.splitPS.bam does not exist or is empty\" 1>&2; exit 1; fi
+	\${samtools} quickcheck lr.asm.${task.process}.splitPS.bam
+	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.${task.process}.splitPS.bam is malformed\" 1>&2; exit 1; fi
+	\${samtools} index -@ ${task.cpus} lr.asm.${task.process}.splitPS.bam
+	rm -rf lr.asm.${task.process}.splitPS.sam lr.asm.fq.gz
 
-	python \${filter_align_py} -t ${task.cpus} -i lr.asm.minCovLen.splitPS.bam -o lr.asm.minCovLen.splitPS.tmp.bam -l ${params.pipeline.min_len_alignment} \
+	python \${filter_align_py} -t ${task.cpus} -i lr.asm.${task.process}.splitPS.bam -o lr.asm.${task.process}.splitPS.tmp.bam -l ${params.pipeline.min_len_alignment} \
 	-e ${params.pipeline.assembly.max_error_rate.lenient} -m ${params.pipeline.min_mapq.strict}
-	mv -f lr.asm.minCovLen.splitPS.tmp.bam lr.asm.minCovLen.splitPS.bam
-	\${samtools} index -@ ${task.cpus} lr.asm.minCovLen.splitPS.bam
-	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.minCovLen.splitPS.bam | \
+	mv -f lr.asm.${task.process}.splitPS.tmp.bam lr.asm.${task.process}.splitPS.bam
+	\${samtools} index -@ ${task.cpus} lr.asm.${task.process}.splitPS.bam
+	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.${task.process}.splitPS.bam | \
 	awk -v min_cov=\${COLLAPSED_COV_MIN} -v max_cov=\${COLLAPSED_COV_MAX} 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} \
 	{if ((\$3>=min_cov) && (\$3<=max_cov)) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else { if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
-	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.minCovLen.splitPS.collapsed.bed
+	END {if (POS_S!=-1) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.${task.process}.splitPS.collapsed.bed
 	"""
 }
 
+/*
+Using a haplotagged BAM file of gllr mapping to the split haplotigs, extract a BAM of only the reads mapping
+to the ref (hap-resolved assembly) allele. 
+For each phaseset coordinates, extract how many variants have the alt allele on H1 and H2. If a phaseset has
+>25% of the alt on one haplotype and the rest on the other haplotype, the phaseset is suspicious and is flagged
+as "corrupted".
+Corrupted  and uncorrupted regions are polished separately with the ref allele reads. This can create duplicated haplotigs.
+Gllr are remapped to the polished haplotigs which are then filtered on min coverage and length.
+To solve the duplicate issue, the polished haplotigs are mapped to themselves: if an haplotig maps to another haplotig with
+MAPQ 0 and a gap-compressed per-base sequence divergence < 0.1%, haplotig is considered to be a duplicate and is removed.
+*/
 process hapResAsm_polish2 {
 
 	label 'medium_node'
@@ -559,7 +630,7 @@ process hapResAsm_polish2 {
 		tuple path('hap_lr_splitPS.vcf.gz'), path('hap_lr_splitPS.vcf.gz.tbi')
 
 	output:
-		tuple path('detectCorruptPS/ref-to-ref-map/polished_1.filtered.fasta'), path('detectCorruptPS/ref-to-ref-map/polished_1.filtered.fasta.fai'), path('detectCorruptPS/ref-to-ref-map/polished_1.filtered.bed')
+		tuple path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.fasta"), path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.fasta.fai"), path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.bed")
 		
 
 	shell '/bin/bash', '-euo', 'pipefail'
@@ -599,43 +670,50 @@ process hapResAsm_polish2 {
 	then
 		\${samtools} view -@ ${task.cpus} -b -M -L MARGIN_PHASED.corrupt_ps.bed ../MARGIN_PHASED.haplotagged.polish.bam > MARGIN_PHASED.haplotagged.polish.corruptPS.bam
 		\${samtools} index -@ ${task.cpus} MARGIN_PHASED.haplotagged.polish.corruptPS.bam
+
 		python \${extract_reads_within_py} -t ${task.cpus} -b ../MARGIN_PHASED.haplotagged.polish.bam -r MARGIN_PHASED.no_corrupt_ps.bed -B MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam -s -S
 		\${samtools} index -@ ${task.cpus} MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam
+
 		\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.corruptPS.bam -t ${task.cpus} -o flye.polish.corruptPS
 		\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.corruptPS/polished_1.fasta > flye.polish.corruptPS/polished_1.tmp.fasta
+
 		mv -f flye.polish.corruptPS/polished_1.tmp.fasta flye.polish.corruptPS/polished_1.fasta
+
 		\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam -t ${task.cpus} -o flye.polish.noCorruptPS
 		\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.noCorruptPS/polished_1.fasta > flye.polish.noCorruptPS/polished_1.tmp.fasta
 		mv -f flye.polish.noCorruptPS/polished_1.tmp.fasta flye.polish.noCorruptPS/polished_1.fasta
-		cat flye.polish.corruptPS/polished_1.fasta flye.polish.noCorruptPS/polished_1.fasta | awk 'BEGIN {ID=0} {if (substr(\$0,1,1)==\">\") {print \">contig_\" ID; ID+=1} else {print \$0}}' > polished_1.fasta
+
+		cat flye.polish.corruptPS/polished_1.fasta flye.polish.noCorruptPS/polished_1.fasta | awk 'BEGIN {ID=0} {if (substr(\$0,1,1)==\">\") {print \">contig_\" ID; ID+=1} else {print \$0}}' > asm.polished.fasta
 	else
 		\${flye} --polish-target ../${asm_fa} --nano-hq ../MARGIN_PHASED.haplotagged.polish.bam -t ${task.cpus} -o flye.polish.noCorruptPS
 		\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.noCorruptPS/polished_1.fasta > flye.polish.noCorruptPS/polished_1.tmp.fasta
 		mv -f flye.polish.noCorruptPS/polished_1.tmp.fasta flye.polish.noCorruptPS/polished_1.fasta
-		awk 'BEGIN {ID=0} {if (substr(\$0,1,1)==\">\") {print \">contig_\" ID; ID+=1} else {print \$0}}' flye.polish.noCorruptPS/polished_1.fasta > polished_1.fasta
+
+		awk 'BEGIN {ID=0} {if (substr(\$0,1,1)==\">\") {print \">contig_\" ID; ID+=1} else {print \$0}}' flye.polish.noCorruptPS/polished_1.fasta > asm.polished.fasta
 	fi
 
-	\${samtools} faidx polished_1.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' polished_1.fasta.fai | sort -k1,1 -k2,2n > polished_1.bed
+	\${samtools} faidx asm.polished.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.polished.fasta.fai | sort -k1,1 -k2,2n > asm.polished.bed
 	\${samtools} bam2fq -@ ${task.cpus} -n ../MARGIN_PHASED.haplotagged.polish.bam | \${pigz} -p ${task.cpus} -c > MARGIN_PHASED.haplotagged.polish.fastq.gz
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG polished_1.fasta | cut -f1) polished_1.fasta MARGIN_PHASED.haplotagged.polish.fastq.gz > lr.asm.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG asm.polished.fasta | cut -f1) asm.polished.fasta MARGIN_PHASED.haplotagged.polish.fastq.gz > lr.asm.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
 	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck lr.asm.bam
 	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.bam is malformed\" 1>&2; exit 1; fi
-	\${samtools} index -@ ${task.cpus} lr.asm.bam; rm -rf lr.asm.sam MARGIN_PHASED.haplotagged.polish.fastq.gz
+	\${samtools} index -@ ${task.cpus} lr.asm.bam
+	rm -rf lr.asm.sam MARGIN_PHASED.haplotagged.polish.fastq.gz
 
 	\${samtools} depth -@ ${task.cpus} -aa -J -Q 0 -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.bam | \
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} \
 	{if (\$3<${params.pipeline.variant_filter.min_depth}) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else \
 	{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_collapsed_segment})) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
 	END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_collapsed_segment})) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.discard.bed
-	\${bedtools} subtract -a polished_1.bed -b lr.asm.discard.bed | sort -k1,1 -k2,2n > lr.asm.keep.bed
-	\${seqtk} subseq polished_1.fasta lr.asm.keep.bed | tr ':' '_' > polished_1.filtered.fasta
+	\${bedtools} subtract -a asm.polished.bed -b lr.asm.discard.bed | sort -k1,1 -k2,2n > lr.asm.keep.bed
+	\${seqtk} subseq asm.polished.fasta lr.asm.keep.bed | tr ':' '_' > asm.polished.filtered.fasta
 	
 	mkdir ref-to-ref-map; cd ref-to-ref-map
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} -I \$(du -L -BG ../polished_1.filtered.fasta | cut -f1) ../polished_1.filtered.fasta ../polished_1.filtered.fasta > ref2ref.sam
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.asm} -I \$(du -L -BG ../asm.polished.filtered.fasta | cut -f1) ../asm.polished.filtered.fasta ../asm.polished.filtered.fasta > ref2ref.sam
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M ref2ref.sam > ref2ref.bam
 	if [ ! -s ref2ref.bam ]; then echo \"File ref2ref.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck ref2ref.bam
@@ -644,15 +722,18 @@ process hapResAsm_polish2 {
 
 	\${samtools} view -@ ${task.cpus} -F 2048 --tag de ref2ref.bam | awk '{if ((\$5==0) && (\$1!=\$3)) {for (i=6; i<=NF; i+=1){ if (substr(\$i,1,5)==\"de:f:\") \
 	{ERR=substr(\$i,6,length(\$i)-5); if (ERR<=0.001) {print \$1}; break;}}}}' | sort | uniq > duplicates.list
-	awk '{if (substr(\$0,1,1)==\">\"){print substr(\$0,2,length(\$0)-1)}}' ../polished_1.filtered.fasta | sort > contigs.all.list
+	awk '{if (substr(\$0,1,1)==\">\"){print substr(\$0,2,length(\$0)-1)}}' ../asm.polished.filtered.fasta | sort > contigs.all.list
 	comm -23 contigs.all.list duplicates.list > contigs.keep.list
-	\${seqtk} subseq ../polished_1.filtered.fasta contigs.keep.list > polished_1.fasta
-	\${seqtk} seq -L 3000 polished_1.fasta > polished_1.filtered.fasta
-	\${samtools} faidx polished_1.filtered.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' polished_1.filtered.fasta.fai | sort -k1,1 -k2,2n > polished_1.filtered.bed
+	\${seqtk} subseq ../asm.polished.filtered.fasta contigs.keep.list > asm.polished.fasta
+	\${seqtk} seq -L 3000 asm.polished.fasta > asm.polished.${task.process}.fasta
+	\${samtools} faidx asm.polished.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' asm.polished.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.polished.${task.process}.bed
 	"""
 }
 
+/*
+A script filter the alignments, removing alignments with low MAPQ, high error rates or short alignment length if mapping quality is not 60.
+*/
 process hapResAsmPolish_phase_mapFilter {
 
 	label 'medium_node'
@@ -664,7 +745,7 @@ process hapResAsmPolish_phase_mapFilter {
 
 	output:
 
-		tuple path('lr.asm.bam'), path('lr.asm.bam.bai')
+		tuple path("lr.asm.${task.process}.bam"), path("lr.asm.${task.process}.bam.bai")
 		
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -685,13 +766,20 @@ process hapResAsmPolish_phase_mapFilter {
 	\${samtools} index -@ ${task.cpus} lr.asm.bam
 	rm -rf lr.asm.sam
 
-	python \${filter_align_py} -t ${task.cpus} -i lr.asm.bam -o lr.asm.tmp.bam \
+	python \${filter_align_py} -t ${task.cpus} -i lr.asm.bam -o lr.asm.${task.process}.bam \
 	-l ${params.pipeline.min_len_alignment} -e ${params.pipeline.assembly.max_error_rate.lenient} -m ${params.pipeline.min_mapq.strict}
-	mv -f lr.asm.tmp.bam lr.asm.bam
-	\${samtools} index -@ ${task.cpus} lr.asm.bam
+	\${samtools} index -@ ${task.cpus} lr.asm.${task.process}.bam
+	rm -rf lr.asm.bam
 	"""
 }
 
+/*
+Compute a BED file of high quality heterozygous SNP for each haplotig (if found, indicates the other haplotig for that locus is missing)
+Compute the mean read coverage COV2 at those sites if site coverage falls within [0.75*COV, 1.25*COV] to avoid counting very high coverage
+of haplotigs for which only one copy of large repeated region is present (or all copies are collapsed in one).
+Create new list of regions where read coverage falls within [0.75*COV2, 1.25*COV2]: those are regions where reads of both haplotypes map
+Extract high quality SNPs from those regions.
+*/
 process hapResAsmPolish_phase_varFilter {
 
 	label 'medium_node'
@@ -702,7 +790,7 @@ process hapResAsmPolish_phase_varFilter {
 		path lr_cov
 
 	output:
-		tuple path('lr.asm.filtered.vcf.gz'), path('lr.asm.filtered.vcf.gz.tbi')
+		tuple path("lr.asm.${task.process}.vcf.gz"), path("lr.asm.${task.process}.vcf.gz.tbi")
 		
 
 	shell '/bin/bash', '-euo', 'pipefail'
@@ -729,11 +817,19 @@ process hapResAsmPolish_phase_varFilter {
 
 	\${bcftools} view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & (AD>=${params.pipeline.variant_filter.min_ad}) & \
 	(VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" -R lr.asm.collapsed.bed -Oz lr.asm.vcf.gz | \
-	\${bcftools} sort -Oz -o lr.asm.filtered.vcf.gz
-	tabix -p vcf lr.asm.filtered.vcf.gz
+	\${bcftools} sort -Oz -o lr.asm.${task.process}.vcf.gz
+	tabix -p vcf lr.asm.${task.process}.vcf.gz
 	"""
 }
 
+/*
+Compute BED file of SNPs which are phased with their overlapping read coverage.
+Compute mean coverage of these SNPs and coverage deviation around this mean coverage. These are global information.
+Compute mean coverage of these SNPs and coverage deviation around this mean coverage per haplotig. These are local information.
+For haplotigs with phased variants, compute regions where read coverage falls within local([STD-MEAN,STD+MEAN]).
+For haplotigs with no phased variants, compute regions where read coverage falls within global([STD-MEAN,STD+MEAN]).
+Extract SNPs overlapping these regions. 
+*/
 process hapResAsmPolish_phase_varPhasedFilter {
 
 	label 'medium_node'
@@ -745,7 +841,7 @@ process hapResAsmPolish_phase_varPhasedFilter {
 		tuple path('lr.asm.hap.filt.vcf.gz'), path('lr.asm.hap.filt.vcf.gz.tbi')
 
 	output:
-		tuple path('lr.asm.filt.2.vcf.gz'), path('lr.asm.filt.2.vcf.gz.tbi')
+		tuple path("lr.asm.${task.process}.vcf.gz"), path("lr.asm.${task.process}.vcf.gz.tbi")
 		
 
 	shell '/bin/bash', '-euo', 'pipefail'
@@ -785,8 +881,8 @@ process hapResAsmPolish_phase_varPhasedFilter {
 
 	\${bcftools} view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & (AD>=${params.pipeline.variant_filter.min_ad}) & \
 	(VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" -R lr.asm.filt.hq.bed -Oz lr.asm.filt.vcf.gz | \
-	\${bcftools} sort -Oz -o lr.asm.filt.2.vcf.gz
-	tabix -p vcf lr.asm.filt.2.vcf.gz
+	\${bcftools} sort -Oz -o lr.asm.${task.process}.vcf.gz
+	tabix -p vcf lr.asm.${task.process}.vcf.gz
 	"""
 }
 
@@ -798,7 +894,7 @@ process hapResAsmPolish_phase_selectBestPhasedAlignRec {
 		tuple path('lr.asm.hap.bam'), path('lr.asm.hap.bam.bai')
 
 	output:
-		tuple path('lr_asm_hap.phasedSupp2prim.bam'), path('lr_asm_hap.phasedSupp2prim.bam.bai')
+		tuple path("lr_asm_hap.${task.process}.bam"), path("lr_asm_hap.${task.process}.bam.bai")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -806,11 +902,16 @@ process hapResAsmPolish_phase_selectBestPhasedAlignRec {
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 	phased_supp2prim_py=\${PHASED_SUPP2PRIM_PY:-${params.python.script.phased_supp2prim}}
 
-	python \${phased_supp2prim_py} -t ${task.cpus} -b lr.asm.hap.bam -B lr_asm_hap.phasedSupp2prim.bam;
-	\${samtools} index -@ ${task.cpus} lr_asm_hap.phasedSupp2prim.bam;
+	python \${phased_supp2prim_py} -t ${task.cpus} -b lr.asm.hap.bam -B lr_asm_hap.${task.process}.bam;
+	\${samtools} index -@ ${task.cpus} lr_asm_hap.${task.process}.bam;
 	"""	
 }
 
+/*
+Extract read alignments matching the alt allele of each phaseset.
+Polish the assembly with those alignments, creating an alt haplotype-resolved assembly
+Concat the alt assembly to the ref assembly
+*/
 process hapResAsmPolish_polishAlt {
 
 	label 'medium_node'
@@ -821,7 +922,7 @@ process hapResAsmPolish_polishAlt {
 		tuple path('hap_lr_polish.vcf.gz'), path('hap_lr_polish.vcf.gz.tbi')
 
 	output:
-		path 'flye.polish.alt/assembly.all.fasta'
+		path "flye.polish.alt/asm.${task.process}.fasta"
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -836,16 +937,18 @@ process hapResAsmPolish_polishAlt {
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
 
 	python \${extract_ref_reads_py} -t ${task.cpus} -b hap_lr_polish.bam -v hap_lr_polish.vcf.gz -B hap_lr_polish.alt.bam -p --alt
+
 	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M hap_lr_polish.alt.bam > hap_lr_polish.alt.sorted.bam
 	if [ ! -s hap_lr_polish.alt.sorted.bam ]; then echo \"File hap_lr_polish.alt.sorted.bam does not exist or is empty\" 1>&2; exit 1; fi
 	\${samtools} quickcheck hap_lr_polish.alt.sorted.bam
 	if [ ! \$? -eq 0 ]; then echo \"File hap_lr_polish.alt.sorted.bam is malformed\" 1>&2; exit 1; fi
 	mv -f hap_lr_polish.alt.sorted.bam hap_lr_polish.alt.bam
 	\${samtools} index -@ ${task.cpus} hap_lr_polish.alt.bam
+
 	\${flye} --polish-target ${asm_fa} --nano-hq hap_lr_polish.alt.bam -t ${task.cpus} -o flye.polish.alt
 	cd flye.polish.alt
 	\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} polished_1.fasta | awk '{if (substr(\$1,1,1)==\">\"){print \$1 \"_alt\"} else {print \$0}}' > assembly.alt.fasta
-	cat ../${asm_fa} assembly.alt.fasta > assembly.all.fasta
+	cat ../${asm_fa} assembly.alt.fasta > asm.${task.process}.fasta
 	"""
 }
 
@@ -1100,7 +1203,7 @@ process hapResAsmPolish_dualAsm {
 		tuple val(HAP), path('haplotigs.fastq.gz'), path('het_or_collapsed.fastq.gz'), path('homozygous.fastq.gz')
 
 	output:
-		tuple val("${HAP}"), path('assembly.filtered.fasta'), path('assembly.filtered.bed'), path("hap.nodup.fastq.gz")
+		tuple val("${HAP}"), path("assembly.${task.process}.fasta"), path("assembly.${task.process}.bed"), path("lr.${task.process}.fastq.gz")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -1111,14 +1214,14 @@ process hapResAsmPolish_dualAsm {
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 	pigz=\${PIGZ_BIN:-${params.tools.pigz.bin}}
 
-	cat haplotigs.fastq.gz homozygous.fastq.gz het_or_collapsed.fastq.gz > hap.fastq.gz
-	\${seqkit} rmdup -j ${task.cpus} -n -o hap.nodup.fastq hap.fastq.gz
-	rm -rf hap.fastq.gz
-	\${pigz} -p ${task.cpus} hap.nodup.fastq;
+	cat haplotigs.fastq.gz homozygous.fastq.gz het_or_collapsed.fastq.gz > lr.fastq.gz
+	\${seqkit} rmdup -j ${task.cpus} -n -o lr.${task.process}.fastq lr.fastq.gz
+	rm -rf lr.fastq.gz
+	\${pigz} -p ${task.cpus} lr.${task.process}.fastq;
 
 	FLYE_SUBSAMPLE_PARAM=\"\";
 	if [ ${params.genome_size} -gt 0 ]; then FLYE_SUBSAMPLE_PARAM=\"--asm-coverage ${params.pipeline.assembly.subsampling_cov} --genome-size ${params.genome_size}\"; fi;
-	\${flye} --nano-hq hap.nodup.fastq.gz -o . -t ${task.cpus} --read-error ${params.pipeline.assembly.max_error_rate.strict} --scaffold \${FLYE_SUBSAMPLE_PARAM}
+	\${flye} --nano-hq lr.${task.process}.fastq.gz -o . -t ${task.cpus} --read-error ${params.pipeline.assembly.max_error_rate.strict} --scaffold \${FLYE_SUBSAMPLE_PARAM}
 	if [ ! \$? -eq 0 ]; then echo \"Flye has exited prematurely\" 1>&2; exit 1; fi
 	ASM_COMPLETED=\$({ grep \"INFO: Final assembly\" <(tail -n 50 flye.log) || true; } | wc -l)
 	if [ \${ASM_COMPLETED} -eq 0 ] || [ ! -s assembly.fasta ]; then echo \"Flye log incomplete or empty assembly\" 1>&2; exit 1; fi
@@ -1127,9 +1230,9 @@ process hapResAsmPolish_dualAsm {
 	mv -f assembly.fasta.tmp assembly.fasta
 	rm -rf 00-assembly 10-consensus 20-repeat 30-contigger 40-polishing
 	tail -n +2 assembly_info.txt | awk '{if (\$7==\"*\"){print \$1}}' > contigs.list
-	\${seqtk} subseq assembly.fasta contigs.list | awk '{if (NR%2==1){print \">${HAP}#\" substr(\$0,2,length(\$0)-1)} else {print \$0}}' > assembly.filtered.fasta
-	\${samtools} faidx assembly.filtered.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.bed
+	\${seqtk} subseq assembly.fasta contigs.list | awk '{if (NR%2==1){print \">${HAP}#\" substr(\$0,2,length(\$0)-1)} else {print \$0}}' > assembly.${task.process}.fasta
+	\${samtools} faidx assembly.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.${task.process}.fasta.fai | sort -k1,1 -k2,2n > assembly.${task.process}.bed
 	"""
 }
 
@@ -1144,7 +1247,7 @@ process hapResAsmPolish_polishDualAsm_1 {
 		path('lr.filtered.fq.gz')
 
 	output:
-		tuple path('assembly.filtered.fasta'), path('assembly.filtered.fasta.fai'), path('assembly.filtered.bed'), emit: asm
+		tuple path("assembly.${task.process}.fasta"), path("assembly.${task.process}.fasta.fai"), path("assembly.${task.process}.bed"), emit: asm
 		tuple path('lr.asm.bam'), path('lr.asm.bam.bai'), emit: bam
 
 	shell '/bin/bash', '-euo', 'pipefail'
@@ -1179,8 +1282,7 @@ process hapResAsmPolish_polishDualAsm_1 {
 		join h\${HAP_A}_map2_h\${HAP_B}.high_sim.list h\${HAP_A}.assembly.filtered.bed > h\${HAP_A}_map2_h\${HAP_B}.high_sim.bed
 		rm -rf h\${HAP_A}_map2_h\${HAP_B}.bam*
 
-		\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG h\${HAP_A}.assembly.filtered.fasta | cut -f1) \
-		h\${HAP_A}.assembly.filtered.fasta h\${HAP_A}.nodup.fastq.gz > lr.h\${HAP_A}.sam
+		\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG h\${HAP_A}.assembly.filtered.fasta | cut -f1) h\${HAP_A}.assembly.filtered.fasta h\${HAP_A}.nodup.fastq.gz > lr.h\${HAP_A}.sam
 		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.h\${HAP_A}.sam > lr.h\${HAP_A}.bam
 		if [ ! -s lr.h\${HAP_A}.bam ]; then echo \"File lr.h\${HAP_A}.bam does not exist or is empty\" 1>&2; exit 1; fi
 		\${samtools} quickcheck lr.h\${HAP_A}.bam
@@ -1195,17 +1297,17 @@ process hapResAsmPolish_polishDualAsm_1 {
 		rm -rf lr.h\${HAP_A}.bam*;
 	done
 
-	cat assembly.filtered.h1.fasta assembly.filtered.h2.fasta > assembly.filtered.fasta
-	\${samtools} faidx assembly.filtered.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.bed
+	cat assembly.filtered.h1.fasta assembly.filtered.h2.fasta > assembly.${task.process}.fasta
+	\${samtools} faidx assembly.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.${task.process}.fasta.fai | sort -k1,1 -k2,2n > assembly.${task.process}.bed
 
-	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.filtered.fasta | cut -f1) assembly.filtered.fasta lr.filtered.fq.gz > lr.asm.sam
-	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam
-	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi
-	\${samtools} quickcheck lr.asm.bam
-	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.bam is malformed\" 1>&2; exit 1; fi
-	\${samtools} index -@ ${task.cpus} lr.asm.bam
-	rm -rf lr.asm.sam
+	\${minimap2} -t ${task.cpus} -ax map-hifi -Y -I \$(du -L -BG assembly.${task.process}.fasta | cut -f1) assembly.${task.process}.fasta lr.filtered.fq.gz > lr.asm.${task.process}.sam
+	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.${task.process}.sam > lr.asm.${task.process}.bam
+	if [ ! -s lr.asm.${task.process}.bam ]; then echo \"File lr.asm.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi
+	\${samtools} quickcheck lr.asm.${task.process}.bam
+	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.${task.process}.bam is malformed\" 1>&2; exit 1; fi
+	\${samtools} index -@ ${task.cpus} lr.asm.${task.process}.bam
+	rm -rf lr.asm.${task.process}.sam
 	"""
 }
 
@@ -1219,7 +1321,7 @@ process hapResAsmPolish_polishDualAsm_2 {
 		path('cov_stdev.tsv')
 
 	output:
-		tuple path('assembly.filtered.fasta'), path('assembly.filtered.fasta.fai'), path('assembly.filtered.bed')
+		tuple path("assembly.${task.process}.fasta"), path("assembly.${task.process}.fasta.fai"), path("assembly.${task.process}.bed")
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -1229,12 +1331,12 @@ process hapResAsmPolish_polishDualAsm_2 {
 
 	polish_snp_py=\${POLISH_SNP_PY:-${params.python.polish_snp}}
 
-	python \${polish_snp_py} -a ${asm_fa} -v lr.asm.vcf.gz -g 20 -d \$(awk '{printf(\"%.0f\", \$1)}' cov_stdev.tsv) > assembly.filtered.tmp.fasta
-	\${seqtk} seq -L ${params.pipeline.min_len_contig} assembly.filtered.tmp.fasta > assembly.filtered.fasta
-	rm -rf assembly.filtered.tmp.fasta
+	python \${polish_snp_py} -a ${asm_fa} -v lr.asm.vcf.gz -g 20 -d \$(awk '{printf(\"%.0f\", \$1)}' cov_stdev.tsv) > assembly.filtered.fasta
+	\${seqtk} seq -L ${params.pipeline.min_len_contig} assembly.filtered.fasta > assembly.${task.process}.fasta
+	rm -rf assembly.filtered.fasta
 
-	\${samtools} faidx assembly.filtered.fasta
-	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.filtered.fasta.fai | sort -k1,1 -k2,2n > assembly.filtered.bed
+	\${samtools} faidx assembly.${task.process}.fasta
+	awk '{print \$1 \"\\t0\\t\" \$2}' assembly.${task.process}.fasta.fai | sort -k1,1 -k2,2n > assembly.${task.process}.bed
 	"""	
 }
 
@@ -1249,7 +1351,7 @@ process hapResAsmPolish_polishDualAsm_3 {
 		tuple path('sr.bam'), path('sr.bam.bai')
 
 	output:
-		tuple path('H1.polished.fasta'), path('H2.polished.fasta')
+		tuple path('H1.fasta'), path('H2.fasta')
 
 	shell '/bin/bash', '-euo', 'pipefail'
 
@@ -1271,8 +1373,8 @@ process hapResAsmPolish_polishDualAsm_3 {
 		rm -rf polishing/{#}.*; \
 	\"
 
-	cat polishing/H1#*.fasta > H1.polished.fasta
-	cat polishing/H2#*.fasta > H2.polished.fasta
+	cat polishing/H1#*.fasta > H1.fasta
+	cat polishing/H2#*.fasta > H2.fasta
 
 	rm -rf polishing/
 	"""
@@ -1332,6 +1434,9 @@ workflow {
 	}
 	.set { sr_filt_mixhap_asm_chunks_bam_split } // List of (bam, bam.bai) -> [[all bam], [all bam.bai]]
 
+	sr_filt_mixhap_asm_chunks_bam_split.bam.collect().view()
+	sr_filt_mixhap_asm_chunks_bam_split.bam_bai.collect().view()
+
 	sr_filt_mixhap_asm_merge_bam = mergePairedIlluminaBAM_correct(sr_filt_mixhap_asm_chunks_bam_split.bam.collect(), sr_filt_mixhap_asm_chunks_bam_split.bam_bai.collect()) // Merge the Illumina chunks to one single BAM file
 
 	lr_filt_map2mixhap_asm = mapLRtoAsm_2(lr_filt_fq, filt_mixhap_asm) // Map the filtered long reads to the filtered mixed haplotype assembly
@@ -1346,7 +1451,7 @@ workflow {
 	hapres_asm = hapResAsm(local_lr_corr_merge_fq) // Haplotype-resolved assembly of the locally corrected reads
 	hapres_filt_asm = hapResAsm_filter(local_lr_corr_merge_fq, hapres_asm) // Basic haplotig filtering based on min coverage and length
 
-	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, hapres_filt_asm, lr_filt_map2mixhap_asm.bam, lr_filt_map2mixhap_asm.cov)
+	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, lr_filt_map2mixhap_asm.bam, lr_filt_map2mixhap_asm.cov)
 	split_ps_2 = var_CallFilterPhase_1(hapres_filt_asm, split_ps_1.bam, split_ps_1.bed, true)
 	split_ps_3 = hapResAsm_polish1_2(hapres_filt_asm, split_ps_1.bam, split_ps_2.ps_bed, lr_filt_map2mixhap_asm.cov)
 	split_ps = var_CallFilterPhase_2(split_ps_3.asm, split_ps_3.bam, split_ps_3.bed, false)
