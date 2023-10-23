@@ -443,7 +443,7 @@ process hapResAsm_filter {
 	{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
 	END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.filtered.bed
 
-	\${seqtk} subseq assembly.fasta lr.asm.filtered.bed | tr ':' '_' > asm.${task.process}.fasta
+	\${seqtk} subseq ${asm_fa} lr.asm.filtered.bed | tr ':' '_' > asm.${task.process}.fasta
 	\${samtools} faidx asm.${task.process}.fasta
 	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 	"""
