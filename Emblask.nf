@@ -1451,7 +1451,7 @@ workflow {
 	hapres_asm = hapResAsm(local_lr_corr_merge_fq) // Haplotype-resolved assembly of the locally corrected reads
 	hapres_filt_asm = hapResAsm_filter(local_lr_corr_merge_fq, hapres_asm) // Basic haplotig filtering based on min coverage and length
 
-	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, lr_filt_map2mixhap_asm.bam, lr_filt_map2mixhap_asm.cov)
+	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, hapres_filt_asm, lr_filt_map2mixhap_asm.cov)
 	split_ps_2 = var_CallFilterPhase_1(hapres_filt_asm, split_ps_1.bam, split_ps_1.bed, true)
 	split_ps_3 = hapResAsm_polish1_2(hapres_filt_asm, split_ps_1.bam, split_ps_2.ps_bed, lr_filt_map2mixhap_asm.cov)
 	split_ps = var_CallFilterPhase_2(split_ps_3.asm, split_ps_3.bam, split_ps_3.bed, false)
