@@ -19,6 +19,7 @@ Output reads are compressed.
 process filterONT {
 
 	label 'small_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path bam_in
@@ -26,8 +27,6 @@ process filterONT {
 
 	output:
 		path "lr.${task.process}.fq.gz"
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	script:
 
@@ -71,14 +70,13 @@ Compress output.
 process extractIllumina_buildDBG {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple val(trio_member), path(bam_in), path(fastq_in) // trio_member can be 'proband', 'father' or 'mother'
 
 	output:
-		tuple path("sr.${trio_member}.${task.process}.fq.gz"), path("dbg.${trio_member}.${task.process}.gfa.gz"), path("dbg.${trio_member}.${task.process}.bfi")
-
-	shell '/bin/bash', '-euo', 'pipefail'
+		tuple val(trio_member), path("sr.${task.process}.fq.gz"), path("dbg.${task.process}.gfa.gz"), path("dbg.${task.process}.bfi")
 
 	script:
 
@@ -87,16 +85,16 @@ process extractIllumina_buildDBG {
 			samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 			bifrost=\${BIFROST:-${params.tools.bifrost.bin}}
 
-			\${samtools} fastq -@ ${task.cpus} -o sr.${trio_member}.${task.process}.fq.gz ${bam_in};
-			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${trio_member}.${task.process}.fq.gz -o dbg.${trio_member}.${task.process};
+			\${samtools} fastq -@ ${task.cpus} -o sr.${task.process}.fq.gz ${bam_in};
+			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${task.process}.fq.gz -o dbg.${task.process};
 			"""
 		}
 		else if (fastq_in) {
 			"""
 			bifrost=\${BIFROST:-${params.tools.bifrost.bin}}
 
-			ln -s ${fastq_in} sr.${trio_member}.${task.process}.fq.gz
-			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${trio_member}.fq.gz -o dbg.${trio_member}.${task.process};
+			ln -s ${fastq_in} sr.${task.process}.fq.gz
+			\${bifrost} build -v -k 31 -t ${task.cpus} -s sr.${task.process}.fq.gz -o dbg.${task.process};
 			"""
 		}
 		else error("No corrected reads in BAM or FASTQ format provided in input")
@@ -109,14 +107,13 @@ Compress output.
 process extractPairedIllumina {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path(sr_bam_in)
 
 	output:
 		path "sr.${task.process}.fq.gz"
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -132,14 +129,13 @@ Split a compressed FASTQ file of Illumina reads into uncompressed chunks of
 process splitPairedIllumina {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path sr_fq
 
 	output:
 		path "sr.${task.process}.fq.part_*"
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	pigz=\${PIGZ_BIN:-${params.tools.pigz.bin}}
@@ -156,14 +152,13 @@ FASTA. Index FASTA and create BED file of contigs. Remove tmp files.
 process mixHapAsm {
 
 	label 'large_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path filtered_lr_fq
 
 	output:
 		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -197,6 +192,7 @@ from the mixed-haplotype assembly.
 process mixHapAsm_filter {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('lr.asm.hap.bam'), path('lr.asm.hap.bam.bai')
@@ -206,8 +202,6 @@ process mixHapAsm_filter {
 
 	output:
 		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -254,6 +248,7 @@ This process makes the assumption that less than 10 billion jobs will be used (:
 process prepLocalCorrection  {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('lr.bam'), path('lr.bam.bai')
@@ -262,8 +257,6 @@ process prepLocalCorrection  {
 	output:
 		path("split/lr.corrected.?????????.*") // Should include all the lr.corrected.?????????.hc.bed, split/lr.corrected.?????????.lmc.bed, split/lr.corrected.?????????.bed, split/lr.corrected.?????????.hc.dict
 
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	bedtools=\${BEDTOOLS:-${params.tools.bedtools.bin}}
@@ -304,6 +297,7 @@ Output is compressed.
 process localCorrection  {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple val(id), path("*")
@@ -312,8 +306,6 @@ process localCorrection  {
 
 	output:
 		path "${id}.lr.corr.fastq.gz"
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	pigz=\${PIGZ_BIN:-${params.tools.pigz.bin}}
@@ -343,15 +335,14 @@ Compress output.
 process mergeLocalCorrection {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path lr_chunks_fq_gz
 		tuple path('lr.asm.bam'), path('lr.asm.bam.bai')
 
 	output:
-		path 'lr.corrected.fastq.gz'
-
-	shell '/bin/bash', '-euo', 'pipefail'
+		path "lr.${task.process}.fastq.gz"
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -362,10 +353,10 @@ process mergeLocalCorrection {
 	\${seqkit} rmdup -j ${task.cpus} -n -o lr.corrected.nodup.fastq lr.corrected.fastq.gz
 	rm -rf lr.corrected.fastq.gz
 	\${pigz} -p ${task.cpus} lr.corrected.nodup.fastq
-	mv -f lr.corrected.nodup.fastq.gz lr.corrected.fastq.gz
-	\${samtools} view -@ ${task.cpus} -b -f 4 lr.asm.bam | \${samtools} bam2fq -n -@ ${task.cpus} - 2> /dev/null | \${pigz} -p ${task.cpus} -c >> lr.corrected.fastq.gz
-	\${pigz} -p ${task.cpus} -t lr.corrected.fastq.gz
-	if [ ! \$? -eq 0 ]; then echo \"File lr.corrected.fastq.gz is malformed\" 1>&2; exit 1; fi
+	mv -f lr.corrected.nodup.fastq.gz lr.${task.process}.fastq.gz
+	\${samtools} view -@ ${task.cpus} -b -f 4 lr.asm.bam | \${samtools} bam2fq -n -@ ${task.cpus} - 2> /dev/null | \${pigz} -p ${task.cpus} -c >> lr.${task.process}.fastq.gz
+	\${pigz} -p ${task.cpus} -t lr.${task.process}.fastq.gz
+	if [ ! \$? -eq 0 ]; then echo \"File lr.${task.process}.fastq.gz is malformed\" 1>&2; exit 1; fi
 	"""
 }
 
@@ -377,14 +368,13 @@ FASTA. Index FASTA and create BED file of contigs. Remove tmp files.
 process hapResAsm {
 
 	label 'large_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path filtered_lr_fq_gz
 
 	output:
 		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -413,6 +403,7 @@ Filter out haplotigs from the haplotype-resolved assembly which are either too s
 process hapResAsm_filter {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path lr_fq_gz
@@ -420,8 +411,6 @@ process hapResAsm_filter {
 
 	output:
 		tuple path("asm.${task.process}.fasta"), path("asm.${task.process}.fasta.fai"), path("asm.${task.process}.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -443,7 +432,7 @@ process hapResAsm_filter {
 	{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
 	END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.filtered.bed
 
-	\${seqtk} subseq assembly.fasta lr.asm.filtered.bed | tr ':' '_' > asm.${task.process}.fasta
+	\${seqtk} subseq ${asm_fa} lr.asm.filtered.bed | tr ':' '_' > asm.${task.process}.fasta
 	\${samtools} faidx asm.${task.process}.fasta
 	awk '{print \$1 \"\\t0\\t\" \$2}' asm.${task.process}.fasta.fai | sort -k1,1 -k2,2n > asm.${task.process}.bed
 	"""
@@ -463,6 +452,7 @@ potentially collapsed (only one of the 2 haplotypes exist in the assembly or hap
 process hapResAsm_polish1_1 {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path lr_fq_gz
@@ -472,8 +462,6 @@ process hapResAsm_polish1_1 {
 	output:
 		tuple path("lr.asm.${task.process}.bam"), path("lr.asm.${task.process}.bam.bai"), emit: bam
 		path "lr.asm.${task.process}.collapsed.bed", emit: bed
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -544,6 +532,7 @@ potentially collapsed (for a given locus, only one of the 2 haplotypes exist in 
 process hapResAsm_polish1_2 {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
@@ -555,8 +544,6 @@ process hapResAsm_polish1_2 {
 		tuple path("assembly.${task.process}.splitPS.fasta"), path("assembly.${task.process}.splitPS.fasta.fai"), path("assembly.${task.process}.splitPS.bed"), emit: asm
 		tuple path("lr.asm.${task.process}.splitPS.bam"), path("lr.asm.${task.process}.splitPS.bam.bai"), emit: bam
 		path "lr.asm.${task.process}.splitPS.collapsed.bed", emit: bed
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -623,6 +610,7 @@ MAPQ 0 and a gap-compressed per-base sequence divergence < 0.1%, haplotig is con
 process hapResAsm_polish2 {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
@@ -631,9 +619,6 @@ process hapResAsm_polish2 {
 
 	output:
 		tuple path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.fasta"), path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.fasta.fai"), path("detectCorruptPS/ref-to-ref-map/asm.polished.${task.process}.bed")
-		
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -737,17 +722,14 @@ A script filter the alignments, removing alignments with low MAPQ, high error ra
 process hapResAsmPolish_phase_mapFilter {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
-
 		path lr_fq_gz
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 
 	output:
-
 		tuple path("lr.asm.${task.process}.bam"), path("lr.asm.${task.process}.bam.bai")
-		
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -783,6 +765,7 @@ Extract high quality SNPs from those regions.
 process hapResAsmPolish_phase_varFilter {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('lr.asm.bam'), path('lr.asm.bam.bai')
@@ -791,9 +774,6 @@ process hapResAsmPolish_phase_varFilter {
 
 	output:
 		tuple path("lr.asm.${task.process}.vcf.gz"), path("lr.asm.${task.process}.vcf.gz.tbi")
-		
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -833,6 +813,7 @@ Extract SNPs overlapping these regions.
 process hapResAsmPolish_phase_varPhasedFilter {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 
@@ -842,9 +823,6 @@ process hapResAsmPolish_phase_varPhasedFilter {
 
 	output:
 		tuple path("lr.asm.${task.process}.vcf.gz"), path("lr.asm.${task.process}.vcf.gz.tbi")
-		
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -886,17 +864,22 @@ process hapResAsmPolish_phase_varPhasedFilter {
 	"""
 }
 
+/*
+Haplotagging can haplotag primary and supplementary alignments (using provided phasing configuration files).
+Sometimes, for a given read, only one or more supplementary will be haplotagged (phased) but not the
+primary. When this is the case, this process changes the primary into a supplementary and changes one of
+the supplementary into a primary.
+*/
 process hapResAsmPolish_phase_selectBestPhasedAlignRec {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('lr.asm.hap.bam'), path('lr.asm.hap.bam.bai')
 
 	output:
 		tuple path("lr_asm_hap.${task.process}.bam"), path("lr_asm_hap.${task.process}.bam.bai")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -915,6 +898,7 @@ Concat the alt assembly to the ref assembly
 process hapResAsmPolish_polishAlt {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
@@ -922,9 +906,7 @@ process hapResAsmPolish_polishAlt {
 		tuple path('hap_lr_polish.vcf.gz'), path('hap_lr_polish.vcf.gz.tbi')
 
 	output:
-		path "flye.polish.alt/asm.${task.process}.fasta"
-
-	shell '/bin/bash', '-euo', 'pipefail'
+		path "asm.${task.process}.fasta"
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -946,15 +928,16 @@ process hapResAsmPolish_polishAlt {
 	\${samtools} index -@ ${task.cpus} hap_lr_polish.alt.bam
 
 	\${flye} --polish-target ${asm_fa} --nano-hq hap_lr_polish.alt.bam -t ${task.cpus} -o flye.polish.alt
-	cd flye.polish.alt
-	\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} polished_1.fasta | awk '{if (substr(\$1,1,1)==\">\"){print \$1 \"_alt\"} else {print \$0}}' > assembly.alt.fasta
-	cat ../${asm_fa} assembly.alt.fasta > asm.${task.process}.fasta
+
+	cat ${asm_fa} <(\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.alt/polished_1.fasta | \
+	awk '{if (substr(\$1,1,1)==\">\"){print \$1 \"_alt\"} else {print \$0}}') > asm.${task.process}.fasta
 	"""
 }
 
 process hapResAsmPolish_trioBin {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('mixhap_asm.fasta'), path('mixhap_asm.fasta.fai'), path('mixhap_asm.bed')
@@ -970,8 +953,6 @@ process hapResAsmPolish_trioBin {
 
 	output:
 		tuple path("trio_binning_h0.bed"), path("trio_binning_h1.bed"), path("trio_binning_h2.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1019,6 +1000,7 @@ process hapResAsmPolish_trioBin {
 	\${samtools} quickcheck asm_hap2mixed.bam;
 	if [ ! \$? -eq 0 ]; then echo \"File asm_hap2mixed.bam is malformed\" 1>&2; exit 1; fi;
 	\${samtools} index -@ ${task.cpus} asm_hap2mixed.bam; rm -rf asm_hap2mixed.sam;
+
 	python \${detect_hap_collide_py} -t ${task.cpus} -b asm_hap2mixed.bam -p ../hap_bin.conf.2.all.list | sort > trio_binning.hap_collision.list;
 	cut -f1 trio_binning.hap_collision.list > trio_binning.hap_collision.nohap.list;
 
@@ -1040,6 +1022,7 @@ process hapResAsmPolish_trioBin {
 process hapResAsmPolish_extractPhased {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('h0.bed'), path('h1.bed'), path('h2.bed')
@@ -1049,8 +1032,6 @@ process hapResAsmPolish_extractPhased {
 	output:
 		tuple val('H1'), path('h1.hap.fastq.gz')
 		tuple val('H2'), path('h2.hap.fastq.gz')
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1080,6 +1061,7 @@ process hapResAsmPolish_extractPhased {
 process hapResAsmPolish_getCollapsedHom {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('h0.bed'), path('h1.bed'), path('h2.bed')
@@ -1090,8 +1072,6 @@ process hapResAsmPolish_getCollapsedHom {
 		tuple val('H1'), path('h1.het_or_collapsed.fastq.gz'), path('h1.homozygous.fastq.gz'), emit: fastq_h1
 		tuple val('H2'), path('h2.het_or_collapsed.fastq.gz'), path('h2.homozygous.fastq.gz'), emit: fastq_h2
 		path('cov_stdev.tsv'), emit: cov
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1198,14 +1178,13 @@ process hapResAsmPolish_getCollapsedHom {
 process hapResAsmPolish_dualAsm {
 
 	label 'large_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple val(HAP), path('haplotigs.fastq.gz'), path('het_or_collapsed.fastq.gz'), path('homozygous.fastq.gz')
 
 	output:
 		tuple val("${HAP}"), path("assembly.${task.process}.fasta"), path("assembly.${task.process}.bed"), path("lr.${task.process}.fastq.gz")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	flye=\${FLYE:-${params.tools.flye.bin}}
@@ -1239,6 +1218,7 @@ process hapResAsmPolish_dualAsm {
 process hapResAsmPolish_polishDualAsm_1 {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('h1.assembly.filtered.fasta'), path('h1.assembly.filtered.bed'), path("h1.nodup.fastq.gz")
@@ -1248,9 +1228,7 @@ process hapResAsmPolish_polishDualAsm_1 {
 
 	output:
 		tuple path("assembly.${task.process}.fasta"), path("assembly.${task.process}.fasta.fai"), path("assembly.${task.process}.bed"), emit: asm
-		tuple path('lr.asm.bam'), path('lr.asm.bam.bai'), emit: bam
-
-	shell '/bin/bash', '-euo', 'pipefail'
+		tuple path("lr.asm.${task.process}.bam"), path("lr.asm.${task.process}.bam.bai"), emit: bam
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1314,6 +1292,7 @@ process hapResAsmPolish_polishDualAsm_1 {
 process hapResAsmPolish_polishDualAsm_2 {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
@@ -1322,8 +1301,6 @@ process hapResAsmPolish_polishDualAsm_2 {
 
 	output:
 		tuple path("assembly.${task.process}.fasta"), path("assembly.${task.process}.fasta.fai"), path("assembly.${task.process}.bed")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1343,7 +1320,7 @@ process hapResAsmPolish_polishDualAsm_2 {
 process hapResAsmPolish_polishDualAsm_3 {
 
 	label 'medium_node'
-
+	shell '/bin/bash', '-euo', 'pipefail'
 	publishDir "${params.out_dir}"
 
 	input:
@@ -1352,8 +1329,6 @@ process hapResAsmPolish_polishDualAsm_3 {
 
 	output:
 		tuple path('H1.fasta'), path('H2.fasta')
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -1406,11 +1381,11 @@ workflow {
 
     parents_sr_dbg = extractIllumina_buildDBG(parents_sr)
 
-	parents_sr_dbg.flatten().map { file -> tuple(file.name.substring(0,6), file) }.groupTuple().branch {
+    parents_sr_dbg.groupTuple().branch {
         paternal: it[0] == "father"
-        		return it[1]
+        		return it.tail()
         maternal: it[0] == "mother"
-        		return it[1]
+        		return it.tail()
     }.set { parents_sr_dbg_bin }
 
 	sr_chunks_fq = splitPairedIllumina(proband_sr_fq).flatten() // Split a paired Illumina FASTQ into chunks
@@ -1434,9 +1409,6 @@ workflow {
 	}
 	.set { sr_filt_mixhap_asm_chunks_bam_split } // List of (bam, bam.bai) -> [[all bam], [all bam.bai]]
 
-	sr_filt_mixhap_asm_chunks_bam_split.bam.collect().view()
-	sr_filt_mixhap_asm_chunks_bam_split.bam_bai.collect().view()
-
 	sr_filt_mixhap_asm_merge_bam = mergePairedIlluminaBAM_correct(sr_filt_mixhap_asm_chunks_bam_split.bam.collect(), sr_filt_mixhap_asm_chunks_bam_split.bam_bai.collect()) // Merge the Illumina chunks to one single BAM file
 
 	lr_filt_map2mixhap_asm = mapLRtoAsm_2(lr_filt_fq, filt_mixhap_asm) // Map the filtered long reads to the filtered mixed haplotype assembly
@@ -1451,7 +1423,7 @@ workflow {
 	hapres_asm = hapResAsm(local_lr_corr_merge_fq) // Haplotype-resolved assembly of the locally corrected reads
 	hapres_filt_asm = hapResAsm_filter(local_lr_corr_merge_fq, hapres_asm) // Basic haplotig filtering based on min coverage and length
 
-	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, lr_filt_map2mixhap_asm.bam, lr_filt_map2mixhap_asm.cov)
+	split_ps_1 = hapResAsm_polish1_1(local_lr_corr_merge_fq, hapres_filt_asm, lr_filt_map2mixhap_asm.cov)
 	split_ps_2 = var_CallFilterPhase_1(hapres_filt_asm, split_ps_1.bam, split_ps_1.bed, true)
 	split_ps_3 = hapResAsm_polish1_2(hapres_filt_asm, split_ps_1.bam, split_ps_2.ps_bed, lr_filt_map2mixhap_asm.cov)
 	split_ps = var_CallFilterPhase_2(split_ps_3.asm, split_ps_3.bam, split_ps_3.bed, false)

@@ -1,16 +1,15 @@
 process mapLRtoAsm {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path lr_fq
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 
 	output:
-		tuple path('lr.asm.bam'), path('lr.asm.bam.bai'), emit: bam
-		path('lr.asm.cov'), emit: cov
-
-	shell '/bin/bash', '-euo', 'pipefail'
+		tuple path("lr.${task.process}.bam"), path("lr.${task.process}.bam.bai"), emit: bam
+		path("lr.${task.process}.cov"), emit: cov
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
@@ -19,38 +18,35 @@ process mapLRtoAsm {
 	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
 	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq} > lr.asm.sam;
-	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.asm.sam > lr.asm.bam;
-	if [ ! -s lr.asm.bam ]; then echo \"File lr.asm.bam does not exist or is empty\" 1>&2; exit 1; fi;
-	\${samtools} quickcheck lr.asm.bam;
-	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.bam is malformed\" 1>&2; exit 1; fi;
-	\${samtools} index -@ ${task.cpus} lr.asm.bam; rm -rf lr.asm.sam;
+	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq} > lr.${task.process}.sam;
+	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.${task.process}.sam > lr.${task.process}.bam;
+	if [ ! -s lr.${task.process}.bam ]; then echo \"File lr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi;
+	\${samtools} quickcheck lr.${task.process}.bam;
+	if [ ! \$? -eq 0 ]; then echo \"File lr.${task.process}.bam is malformed\" 1>&2; exit 1; fi;
+	\${samtools} index -@ ${task.cpus} lr.${task.process}.bam; rm -rf lr.${task.process}.sam;
 
-	\${samtools} depth -@ ${task.cpus} -aa -J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.bam | \
+	\${samtools} depth -@ ${task.cpus} -aa -J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.${task.process}.bam | \
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; SUM=0; COUNT=0; SUM_ALL=0; COUNT_ALL=0} \
 	{if (\$1!=CONTIG) {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT, MEAN}; CONTIG=\$1; SUM=0; COUNT=0}; SUM+=\$3; COUNT+=1; SUM_ALL+=\$3; COUNT_ALL+=1} \
-	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT,MEAN}; MEAN_ALL=0; if (COUNT_ALL>=1) {MEAN_ALL=SUM_ALL/COUNT_ALL}; print \"all\", COUNT_ALL, MEAN_ALL}' > lr.asm.cov;
+	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT,MEAN}; MEAN_ALL=0; if (COUNT_ALL>=1) {MEAN_ALL=SUM_ALL/COUNT_ALL}; print \"all\", COUNT_ALL, MEAN_ALL}' > lr.${task.process}.cov;
 	"""
 }
 
 process var_CallFilterPhase {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
-
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 		tuple path('lr.bam'), path('lr.bam.bai')
 		path var_regions_bed // Optional, must be empty list ([]) if not used. Workaround till Nextflow implement this.
 		val skipHaplotypeBAM // true or false
 
 	output:
-
 		tuple path('margin/MARGIN_PHASED.haplotagged.bam'), path('margin/MARGIN_PHASED.haplotagged.bam.bai'), optional: true, emit: hap_bam
 		tuple path('margin/MARGIN_PHASED.phased.vcf.gz'), path('margin/MARGIN_PHASED.phased.vcf.gz.tbi'), emit: hap_vcf
 		path 'margin/MARGIN_PHASED.phaseset.bed', emit: ps_bed
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	script:
 
@@ -98,17 +94,14 @@ process var_CallFilterPhase {
 process varCall_hifi {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
-
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 		tuple path('lr.bam'), path('lr.bam.bai')
 
 	output:
-
 		tuple path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz'), path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz.tbi')
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	run_pepper_margin_deepvariant call_variant -b lr.bam -f ${asm_fa} -o . -t ${task.cpus} -s Sample \
@@ -119,6 +112,7 @@ process varCall_hifi {
 process varCall_ontR9_trainedModels {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path('lr.bam'), path('lr.bam.bai')
@@ -126,8 +120,6 @@ process varCall_ontR9_trainedModels {
 
 	output:
 		tuple path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz'), path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz.tbi')
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	script:
 
@@ -146,21 +138,18 @@ process varCall_ontR9_trainedModels {
 process varPhase {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
-
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 		tuple path('lr.bam'), path('lr.bam.bai')
 		tuple path('lr.asm.vcf.gz'), path('lr.asm.vcf.gz.tbi')
 		val skipHaplotypeBAM // true or false (whether phased BAM is output)
 
 	output:
-
 		tuple path('margin/MARGIN_PHASED.haplotagged.bam'), path('margin/MARGIN_PHASED.haplotagged.bam.bai'), optional: true, emit: hap_bam
 		tuple path('margin/MARGIN_PHASED.phased.vcf.gz'), path('margin/MARGIN_PHASED.phased.vcf.gz.tbi'), emit: hap_vcf
 		path 'margin/MARGIN_PHASED.phaseset.bed', emit: ps_bed
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	script:
 
@@ -192,6 +181,7 @@ Map Illumina reads to assembly, sort and index output BAM file.
 process mapPairedIllumina {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		tuple path(sr_fq), path(asm_fa), path(asm_fai), path(asm_bed)
@@ -199,8 +189,6 @@ process mapPairedIllumina {
 
 	output:
 		tuple path("sr.${task.process}.bam"), path("sr.${task.process}.bam.bai")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	script:
 
@@ -226,6 +214,7 @@ process mapPairedIllumina {
 process mergePairedIlluminaBAM {
 
 	label 'medium_node'
+	shell '/bin/bash', '-euo', 'pipefail'
 
 	input:
 		path("?????????.bam")
@@ -233,8 +222,6 @@ process mergePairedIlluminaBAM {
 
 	output:
 		tuple path("sr.${task.process}.bam"), path("sr.${task.process}.bam.bai")
-
-	shell '/bin/bash', '-euo', 'pipefail'
 
 	"""
 	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
