@@ -1090,7 +1090,7 @@ process hapResAsmPolish_getCollapsedHom {
 	awk '{print \$1 \"\\t\" \$2 \"\\t\" (\$2+1) \"\\t\" \$3}' > lr.hap.phased.bed.tmp
 	mv -f lr.hap.phased.bed.tmp lr.hap.phased.bed
 	awk 'BEGIN {i=1} {SUM+=\$4; COUNT+=1; SAMP[i]=\$4; i+=1} END {MEAN=SUM/COUNT; SUMSQ=0; for (i=1; i<=COUNT; i++) {SUMSQ+=(SAMP[i]-MEAN)^2}; print MEAN \"\\t\" sqrt(SUMSQ/COUNT)}' lr.hap.phased.bed > cov_stdev.tsv
-	COV=\$(awk '{print \$1}' cov_stdev.tsv); AAD_COV=\$(awk '{print \$2}' cov_stdev.tsv)
+	COV=\$(awk '{print \$1}' cov_stdev.tsv); STDEV_COV=\$(awk '{print \$2}' cov_stdev.tsv)
 	python ${params.python.script.extract_ref_reads} -t ${task.cpus} -b lr.hap.phasedSupp2prim.bam -v lr.hap.vcf.gz -B lr.hap.ref.bam --only_include_phased --include_supplementary;
 	\${samtools} index -@ ${task.cpus} lr.hap.ref.bam
 	join <(\${samtools} depth -@ ${task.cpus} -aa -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} -b lr.hap.phased.bed lr.hap.ref.bam | \
