@@ -1297,7 +1297,8 @@ process hapResAsmPolish_polishDualAsm_2 {
 	input:
 		tuple path(asm_fa), path(asm_fai), path(asm_bed)
 		tuple path('lr.asm.vcf.gz'), path('lr.asm.vcf.gz.tbi')
-		path('cov_stdev.tsv')
+		path(cov_stdev_hapres_asm_tsv)
+		path(cov_mixhap_asm_tsv)
 
 	output:
 		tuple path("assembly.${task.process}.fasta"), path("assembly.${task.process}.fasta.fai"), path("assembly.${task.process}.bed")
@@ -1308,7 +1309,11 @@ process hapResAsmPolish_polishDualAsm_2 {
 
 	polish_snp_py=\${POLISH_SNP_PY:-${params.python.polish_snp}}
 
-	python \${polish_snp_py} -a ${asm_fa} -v lr.asm.vcf.gz -g 20 -d \$(awk '{printf(\"%.0f\", \$1)}' cov_stdev.tsv) > assembly.filtered.fasta
+	MIN_VAR_DP=\$(awk '{printf(\"%.0f\", (\$1/2)*${params.pipeline.ratio_cov.lower_bound.strict})}' ${cov_stdev_hapres_asm_tsv})
+	MAX_VAR_DP=\$(awk '{printf(\"%.0f\", (\$1/2)*${params.pipeline.ratio_cov.upper_bound.strict})}' ${cov_mixhap_asm_tsv})
+
+	python \${polish_snp_py} -a ${asm_fa} -v lr.asm.vcf.gz -g ${params.pipeline.variant_filter.min_gq} -G ${params.pipeline.variant_filter.min_gq} \
+	-d \${MIN_VAR_DP} -D \${MAX_VAR_DP} -f 0.75 > assembly.filtered.fasta
 	\${seqtk} seq -L ${params.pipeline.min_len_contig} assembly.filtered.fasta > assembly.${task.process}.fasta
 	rm -rf assembly.filtered.fasta
 
@@ -1457,7 +1462,7 @@ workflow {
 
 	dual_asm_polishCovErr = hapResAsmPolish_polishDualAsm_1(dual_asm_bin.h1, dual_asm_bin.h2, lr_het_hom_coll_fq.cov, lr_filt_fq)
 	dual_asm_polishVarCall = hapResAsmPolish_polishDualAsm_call(dual_asm_polishCovErr.bam, dual_asm_polishCovErr.asm)
-	dual_asm_polishSNP = hapResAsmPolish_polishDualAsm_2(dual_asm_polishCovErr.asm, dual_asm_polishVarCall, lr_het_hom_coll_fq.cov)
+	dual_asm_polishSNP = hapResAsmPolish_polishDualAsm_2(dual_asm_polishCovErr.asm, dual_asm_polishVarCall, lr_het_hom_coll_fq.cov, lr_filt_map2mixhap_asm.cov)
 
 	sr_chunks_fq.combine(dual_asm_polishSNP).set { sr_chunks_dual_asm } // Combine each [sr.bam, sr.bam.bai] chunk with the created dual assembly
 
