@@ -427,7 +427,7 @@ process hapResAsm_filter {
 	if [ ! \$? -eq 0 ]; then echo \"File lr.asm.bam is malformed\" 1>&2; exit 1; fi
 	\${samtools} index -@ ${task.cpus} lr.asm.bam; rm -rf lr.asm.sam
 
-	\${samtools} depth -@ ${task.cpus}-J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.bam | \
+	\${samtools} depth -@ ${task.cpus} -J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.asm.bam | \
 	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; POS_S=-1; POS_E=-1} {if (\$3>=${params.pipeline.variant_filter.min_depth}) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else \
 	{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1;}}} \
 	END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_contig})) {print CONTIG, (POS_S-1), (POS_E-1)}}' > lr.asm.filtered.bed
