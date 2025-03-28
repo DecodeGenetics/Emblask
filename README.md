@@ -33,8 +33,8 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
 
 1. **Clone the repository**
   ```bash
-  git clone https://github.com/XXX/XXX.git
-  cd XXX
+  git clone https://github.com/DecodeGenetics/emblask.git
+  cd emblask
   ```
 
 2. **Pull the Singularity containers**
