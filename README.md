@@ -37,19 +37,37 @@ Emblask has been implemented as a Nextflow pipeline. Dependencies have been gath
   cd XXX
   ```
 
-2. **Download the Singularity containers**
+2. **Pull the Singularity containers**
+
+   First, pull the Pepper-Margin-DeepVariant containers
   ```bash
   mkdir -p containers
 
-  singularity pull --dir containers XXX
   singularity pull --dir containers docker://kishwars/pepper_deepvariant:r0.8
   singularity pull --dir containers docker://kishwars/pepper_deepvariant:r0.7
   ```
 
-  The output should be 3 files:
+  Second, pull the Weaver & Emblask container. This container is currently hosted on Sylabs Cloud for which you need to create an account (free):
+  - Go to `https://cloud.sylabs.io/`
+  - Click "Sign up".
+  - Select your method to sign up (Google, GitHub, GitLab, or Microsoft) and choose a username.
+  - Once signed in, click on your username (top right corner) and then "Access Tokens".
+  - Enter a token name such as "SylabsCloud" and then click "Create access token".
+  - Copy the generated access token
+  - Add Sylabs Cloud as a remote endpoint in your Singularity installation:
+  ```bash
+  singularity remote add SylabsCloud cloud.sylabs.io
+  ```
+  When prompted, paste your previously generated access token.
+  - Pull the Weaver & Emblask container:
+  ```bash
+  singularity pull --dir containers --arch amd64 library://guillaumeholley/weaver_emblask/weaver_emblask:latest
+  ```
+
+  After this, you should have 3 containers:
   ```bash
   ls -lh containers
-  # ratr-redhat-latest.sif
+  # weaver_emblask_latest.sif
   # pepper_deepvariant_r0.7.sif
   # pepper_deepvariant_r0.8.sif
   ```
