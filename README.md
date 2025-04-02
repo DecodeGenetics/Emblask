@@ -73,6 +73,7 @@ Emblask has been implemented as a Nextflow pipeline and its software dependencie
   ```
 
 3. **Decompress the Ratatosk-specific models for PMDV r0.7**
+
 These files are already included in this repository and just need to be decompressed
 ```
 cat pmdv/r07/models/ratatosk_r9_guppy5_sup/R9_GUPPY_SUP.tar.gz.* | tar -xvzf -C pmdv/r07/models/ratatosk_r9_guppy5_sup -
