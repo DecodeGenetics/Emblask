@@ -72,15 +72,11 @@ Emblask has been implemented as a Nextflow pipeline and its software dependencie
   # pepper_deepvariant_r0.8.sif
   ```
 
-3. **Download the Ratatosk-specific models for PMDV r0.7**
-
-- Download the models [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
-- Decompress the PMDV models:
+3. **Decompress the Ratatosk-specific models for PMDV r0.7**
+These files are already included in this repository and just need to be decompressed
 ```
-mkdir -p pmdv/r07/models/ratatosk_r9_guppy5_sup
-tar -xvzf R9_GUPPY_SUP_MODELS.tar.gz -C pmdv/r07/models/ratatosk_r9_guppy5_sup
+cat pmdv/r07/models/ratatosk_r9_guppy5_sup/R9_GUPPY_SUP.tar.gz.* | tar -xvzf -C pmdv/r07/models/ratatosk_r9_guppy5_sup -
 ```
-
 The output should be 5 files:
 ```bash
 ls -lh pmdv/r07/models/ratatosk_r9_guppy5_sup
@@ -89,6 +85,12 @@ ls -lh pmdv/r07/models/ratatosk_r9_guppy5_sup
 # R9_GUPPY_SUP_DEEPVARIANT.meta
 # R9_GUPPY_SUP_PEPPER_HP.pkl
 # R9_GUPPY_SUP_PEPPER_SNP.pkl
+```
+
+Alternatively, one can download the models [here](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing) and then decompress the archive:
+```
+mkdir -p pmdv/r07/models/ratatosk_r9_guppy5_sup
+tar -xvzf R9_GUPPY_SUP_MODELS.tar.gz -C pmdv/r07/models/ratatosk_r9_guppy5_sup
 ```
 
 ## Usage ##
