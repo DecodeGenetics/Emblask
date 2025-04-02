@@ -108,7 +108,7 @@ nextflow run -profile cluster Emblask.nf \
 ### Pipeline arguments
 
 **Mandatory**:
-- `--proband_lr_fq_in` or `--proband_lr_bam_in`: Long reads from the sample to assemble in FASTQ or BAM. ONT R9.4 required.
+- `--proband_lr_fq_in` or `--proband_lr_bam_in`: **Corrected** long reads (ONT R9.4) from the sample to assemble in FASTQ or BAM. Use [Ratatosk.nf](https://github.com/DecodeGenetics/Ratatosk/tree/master/Ratatosk_nf) or [Ratatosk](https://github.com/DecodeGenetics/Ratatosk) to perform the correction.
 - `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**
 - `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the sample to assemble in FASTQ or BAM.
 - `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the sample to assemble in FASTQ or BAM.
