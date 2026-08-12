@@ -1477,26 +1477,26 @@ process hapResAsmPolish_polishDualAsm_3 {
 
 workflow {
 
-	if (!params.proband_lr_bam_in && !params.proband_lr_fq_in) error("PROBAND: No corrected long reads in input.")
-	if (params.proband_lr_bam_in && params.proband_lr_fq_in) error("PROBAND: Input corrected long reads can be in BAM or FASTQ format but not both.")
+	if (!params.pro_corr_lr_bam && !params.pro_corr_lr_fq) error("PROBAND: No corrected long reads in input.")
+	if (params.pro_corr_lr_bam && params.pro_corr_lr_fq) error("PROBAND: Input corrected long reads can be in BAM or FASTQ format but not both.")
 
-	if (!params.proband_sr_bam_in && !params.proband_sr_fq_in) error("PROBAND: No short reads in input.")
-	if (params.proband_sr_bam_in && params.proband_sr_fq_in) error("PROBAND: Input short reads can be provided in BAM or FASTQ in input but not both.")
+	if (!params.pro_sr_bam && !params.pro_sr_fq) error("PROBAND: No short reads in input.")
+	if (params.pro_sr_bam && params.pro_sr_fq) error("PROBAND: Input short reads can be provided in BAM or FASTQ in input but not both.")
 
-	if (!params.father_sr_bam_in && !params.father_sr_fq_in) error("FATHER: No short reads in input.")
-	if (params.father_sr_bam_in && params.father_sr_fq_in) error("FATHER: Input short reads can be provided in BAM or FASTQ in input but not both.")
+	if (!params.pat_sr_bam && !params.pat_sr_fq) error("FATHER: No short reads in input.")
+	if (params.pat_sr_bam && params.pat_sr_fq) error("FATHER: Input short reads can be provided in BAM or FASTQ in input but not both.")
 
-	if (!params.mother_sr_bam_in && !params.mother_sr_fq_in) error("MOTHER: No short reads in input.")
-	if (params.mother_sr_bam_in && params.mother_sr_fq_in) error("MOTHER: Input short reads can be provided in BAM or FASTQ in input but not both.")
+	if (!params.mat_sr_bam && !params.mat_sr_fq) error("MOTHER: No short reads in input.")
+	if (params.mat_sr_bam && params.mat_sr_fq) error("MOTHER: Input short reads can be provided in BAM or FASTQ in input but not both.")
 
-	proband_lr_bam = params.proband_lr_bam_in ? [params.proband_lr_bam_in] : []
-	proband_lr_fq = params.proband_lr_fq_in ? [params.proband_lr_fq_in] : []
+	proband_lr_bam = params.pro_corr_lr_bam ? [params.pro_corr_lr_bam] : []
+	proband_lr_fq = params.pro_corr_lr_fq ? [params.pro_corr_lr_fq] : []
 
-	proband_sr_fq = params.proband_sr_fq_in ? Channel.fromPath(params.proband_sr_fq_in) : extractPairedIllumina(Channel.fromPath(params.proband_sr_bam_in))
+	proband_sr_fq = params.pro_sr_fq ? Channel.fromPath(params.pro_sr_fq) : extractPairedIllumina(Channel.fromPath(params.pro_sr_bam))
 
 	parents_sr = Channel.of(
-				['father', params.father_sr_bam_in ? [params.father_sr_bam_in] : [], params.father_sr_fq_in ? [params.father_sr_fq_in] : []],
-				['mother', params.mother_sr_bam_in ? [params.mother_sr_bam_in] : [], params.mother_sr_fq_in ? [params.mother_sr_fq_in] : []]
+				['father', params.pat_sr_bam ? [params.pat_sr_bam] : [], params.pat_sr_fq ? [params.pat_sr_fq] : []],
+				['mother', params.mat_sr_bam ? [params.mat_sr_bam] : [], params.mat_sr_fq ? [params.mat_sr_fq] : []]
     				)
 
 	parents_sr_dbg = extractIllumina_buildDBG(parents_sr)

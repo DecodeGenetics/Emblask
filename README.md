@@ -6,7 +6,7 @@ Emblask.nf is a diploid genome assembly pipeline that produces a set of two hapl
 
 ## Requirements ##
 
-The pipeline has been designed primarily for ONT R9.4 and Illumina data. Emblask will most likely work with ONT R10 too but this has not been tested.
+The pipeline is designed primarily for ONT R9.4 and Illumina data.
 
 ### Data ###
 
@@ -22,11 +22,9 @@ The pipeline takes as input parent-offspring trio data: short reads and **correc
 * Paternal: 30x Illumina
 * Maternal: 30x Illumina
 
-Output genome assembly quality, completeness, N50 and switch error rate are dependent on the input read coverage, N50 and error rate.
-
 ### Software ###
 
-Emblask has been implemented as a Nextflow pipeline and its software dependencies have been gathered within Singularity containers for ease of use.
+Emblask is implemented as a Nextflow pipeline and its software dependencies are gathered in Singularity containers for ease of use.
 
 * [Nextflow](https://www.nextflow.io/)
 * [Singularity](https://apptainer.org/)
@@ -100,21 +98,21 @@ IMPORTANT: See [Cluster configuration](#cluster-configuration) below before runn
 
 ```bash
 nextflow run -profile cluster Emblask.nf \
---proband_lr_fq_in proband_long_reads.fastq.gz --proband_sr_fq_in proband_short_reads.fastq.gz \
---father_sr_fq_in paternal_short_reads.fastq.gz --mother_sr_fq_in maternal_short_reads.fastq.gz \
+--pro_corr_lr_fq proband_corrected_long_reads.fastq.gz --pro_sr_fq proband_short_reads.fastq.gz \
+--pat_sr_fq paternal_short_reads.fastq.gz --mat_sr_fq maternal_short_reads.fastq.gz \
 --out_dir /my/output/directory/
 ```
 
 ### Pipeline arguments
 
-**Mandatory**:
-- `--proband_lr_fq_in` or `--proband_lr_bam_in`: **Corrected** long reads (ONT R9.4) from the sample to assemble in FASTQ or BAM. Use [Ratatosk.nf](https://github.com/DecodeGenetics/Ratatosk/tree/master/Ratatosk_nf) or [Ratatosk](https://github.com/DecodeGenetics/Ratatosk) to perform the correction.
-- `--proband_sr_fq_in` or `--proband_sr_bam_in`: Short reads from the sample to assemble in FASTQ or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**
-- `--father_sr_fq_in` or `--father_sr_bam_in`: Short reads from the father of the sample to assemble in FASTQ or BAM.
-- `--mother_sr_fq_in` or `--mother_sr_bam_in`: Short reads from the mother of the sample to assemble in FASTQ or BAM.
+**Required**:
+- `--pro_corr_lr_fq` or `--pro_corr_lr_bam`: **Corrected** long reads (ONT R9.4) from the sample to assemble in FASTQ(.gz) or BAM. Use [Ratatosk.nf](https://github.com/DecodeGenetics/Ratatosk/tree/master/Ratatosk_nf) or [Ratatosk](https://github.com/DecodeGenetics/Ratatosk) to perform the correction.
+- `--pro_sr_fq` or `--pro_sr_bam`: Short reads from the sample to assemble in FASTQ(.gz) or BAM. **If in FASTQ format, it must be an interleaved FASTQ file!**
+- `--pat_sr_fq` or `--pat_sr_bam`: Paternal short reads for the sample to assemble in FASTQ(.gz) or BAM.
+- `--mat_sr_fq` or `--mat_sr_bam`: Maternal ahort reads for the sample to assemble in FASTQ(.gz) or BAM.
 - `--out_dir`: Output directory.
 
-If the input proband long read coverage exceeds 50x, an estimate of the genome size (in bp) to assemble must be provided with `--genome_size`, e.g `--genome_size 3100000000` for a human sample.
+If the input proband long reads coverage exceeds 50x, an estimate of the genome size (in bp) to assemble must be provided with `--genome_size`, e.g `--genome_size 3100000000` for a human sample.
 
 **Optional**:
 - **--max-lr-bq**: Maximum base quality of the input long reads to assemble. Default is 40.

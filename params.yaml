@@ -1,27 +1,27 @@
 ### PIPELINE INPUT ###
 
-proband_lr_bam_in: ""
-proband_lr_fq_in: ""
+pro_corr_lr_bam: "" # Input corrected long reads for the proband to assemble in BAM format
+pro_corr_lr_fq: "" # Input corrected long reads for the proband to assemble in FASTQ format
 
-proband_sr_bam_in: ""
-proband_sr_fq_in: "" # IMPORTANT: This MUST be an interleaved FASTQ file!
+pro_sr_bam: "" # Input short reads for the proband to assemble in BAM format
+pro_sr_fq: "" # Input short reads for the proband to assemble in FASTQ format. IMPORTANT: This *MUST* be an interleaved FASTQ file!
 
-father_sr_bam_in: ""
-father_sr_fq_in: ""
+pat_sr_bam: "" # Input paternal short reads in BAM format
+pat_sr_fq: "" # Input paternal short reads in FASTQ format
 
-mother_sr_bam_in: ""
-mother_sr_fq_in: ""
+mat_sr_bam: "" # Input maternal short reads in BAM format
+mat_sr_fq: "" # Input maternal short reads in BAM format
 
-out_dir: ""
+out_dir: "" # Output directory
 
-# Size of the genome to assemble in bp for long reads subsampling, e.g. 3100000000 for human
+# Size of the genome to assemble in bp (for long reads subsampling), e.g. 3100000000 for human.
 # Only use if input long read coverage is >50x
 # Default value is -1 (no subsampling)
 genome_size: -1
 
 # Maximum base quality of the input long reads
-# This pipeline is designed for ONT R9.4 long reads for which the maximum base quality SHOULD be 40
-# However, ONT R10 long read data seems to use a maximum base quality of 90
+# This pipeline is designed for ONT R9.4 long reads for which the maximum base quality is 40.
+# However, ONT R10 long read data may use a maximum base quality of 90.
 max_lr_bq: 40
 
 ### PIPELINE CONFIG ###

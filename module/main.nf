@@ -11,25 +11,28 @@ process mapLRtoAsm {
 		tuple path("lr.${task.process}.bam"), path("lr.${task.process}.bam.bai"), emit: bam
 		path("lr.${task.process}.cov"), emit: cov
 
-	"""
-	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
-	minimap2=\${MINIMAP2:-${params.tools.minimap2.bin}}
+	script:
+		def a_cpus = Math.max(1, task.cpus - 1)
 
-	TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
-	MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
+		"""
+		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
+		minimap2=\${MINIMAP2:-${params.tools.minimap2.bin}}
 
-	\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq} > lr.${task.process}.sam;
-	\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.${task.process}.sam > lr.${task.process}.bam;
-	if [ ! -s lr.${task.process}.bam ]; then echo \"File lr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi;
-	\${samtools} quickcheck lr.${task.process}.bam;
-	if [ ! \$? -eq 0 ]; then echo \"File lr.${task.process}.bam is malformed\" 1>&2; exit 1; fi;
-	\${samtools} index -@ ${task.cpus} lr.${task.process}.bam; rm -rf lr.${task.process}.sam;
+		TASK_MEM=\$(echo -e \"${task.memory}\" | cut -d \" \" -f1)
+		MEM_PER_THREADS_SORT=\$(bc -l <<< \"(\${TASK_MEM} / ${task.cpus}) * ${params.tools.samtools.sort.mem_safety_ratio} * 1000\" | awk '{printf(\"%.0f\", \$0)}');
 
-	\${samtools} depth -@ ${task.cpus} -aa -J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.${task.process}.bam | \
-	awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; SUM=0; COUNT=0; SUM_ALL=0; COUNT_ALL=0} \
-	{if (\$1!=CONTIG) {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT, MEAN}; CONTIG=\$1; SUM=0; COUNT=0}; SUM+=\$3; COUNT+=1; SUM_ALL+=\$3; COUNT_ALL+=1} \
-	END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT,MEAN}; MEAN_ALL=0; if (COUNT_ALL>=1) {MEAN_ALL=SUM_ALL/COUNT_ALL}; print \"all\", COUNT_ALL, MEAN_ALL}' > lr.${task.process}.cov;
-	"""
+		\${minimap2} -t ${task.cpus} ${params.tools.minimap2.param.ont_reads} -Y -I \$(du -L -BG ${asm_fa} | cut -f1) ${asm_fa} ${lr_fq} > lr.${task.process}.sam;
+		\${samtools} sort -@ ${task.cpus} -m \${MEM_PER_THREADS_SORT}M lr.${task.process}.sam > lr.${task.process}.bam;
+		if [ ! -s lr.${task.process}.bam ]; then echo \"File lr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi;
+		\${samtools} quickcheck lr.${task.process}.bam;
+		if [ ! \$? -eq 0 ]; then echo \"File lr.${task.process}.bam is malformed\" 1>&2; exit 1; fi;
+		\${samtools} index -@ ${task.cpus} lr.${task.process}.bam; rm -rf lr.${task.process}.sam;
+
+		\${samtools} depth -@ ${a_cpus} -aa -J -Q ${params.pipeline.min_mapq_strict} -G ${params.pipeline.samtools.depth.filter_sec} lr.${task.process}.bam | \
+		awk 'BEGIN {FS=\"\\t\"; OFS=\"\\t\"; CONTIG=\"\"; SUM=0; COUNT=0; SUM_ALL=0; COUNT_ALL=0} \
+		{if (\$1!=CONTIG) {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT, MEAN}; CONTIG=\$1; SUM=0; COUNT=0}; SUM+=\$3; COUNT+=1; SUM_ALL+=\$3; COUNT_ALL+=1} \
+		END {if (CONTIG!=\"\") {MEAN=0; if (COUNT>=1) {MEAN=SUM/COUNT}; print CONTIG, COUNT,MEAN}; MEAN_ALL=0; if (COUNT_ALL>=1) {MEAN_ALL=SUM_ALL/COUNT_ALL}; print \"all\", COUNT_ALL, MEAN_ALL}' > lr.${task.process}.cov;
+		"""
 }
 
 process var_CallFilterPhase {
@@ -103,10 +106,11 @@ process varCall_hifi {
 	output:
 		tuple path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz'), path('PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz.tbi')
 
-	"""
-	run_pepper_margin_deepvariant call_variant -b lr.bam -f ${asm_fa} -o . -t ${task.cpus} -s Sample \
-	--hifi --pepper_include_supplementary --pepper_min_mapq ${params.pipeline.min_mapq.strict} --dv_min_mapping_quality ${params.pipeline.min_mapq.strict}
-	"""
+	script:
+		"""
+		run_pepper_margin_deepvariant call_variant -b lr.bam -f ${asm_fa} -o . -t ${task.cpus} -s Sample \
+		--hifi --pepper_include_supplementary --pepper_min_mapq ${params.pipeline.min_mapq.strict} --dv_min_mapping_quality ${params.pipeline.min_mapq.strict}
+		"""
 }
 
 process varCall_ontR9_trainedModels {
@@ -223,14 +227,15 @@ process mergePairedIlluminaBAM {
 	output:
 		tuple path("sr.${task.process}.bam"), path("sr.${task.process}.bam.bai")
 
-	"""
-	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
+	script:
+		"""
+		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
 
-	\${samtools} merge -@ ${task.cpus} -o sr.${task.process}.bam *.bam # Merge the BAM files
-	if [ ! -s sr.${task.process}.bam ]; then echo \"File sr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi
-	\${samtools} quickcheck sr.${task.process}.bam # Run file truncation check on resulting BAM file
-	if [ ! \$? -eq 0 ]; then echo \"File sr.${task.process}.bam is malformed\" 1>&2; exit 1; fi
-	\${samtools} index -@ ${task.cpus} sr.${task.process}.bam
-	"""
+		\${samtools} merge -@ ${task.cpus} -o sr.${task.process}.bam *.bam # Merge the BAM files
+		if [ ! -s sr.${task.process}.bam ]; then echo \"File sr.${task.process}.bam does not exist or is empty\" 1>&2; exit 1; fi
+		\${samtools} quickcheck sr.${task.process}.bam # Run file truncation check on resulting BAM file
+		if [ ! \$? -eq 0 ]; then echo \"File sr.${task.process}.bam is malformed\" 1>&2; exit 1; fi
+		\${samtools} index -@ ${task.cpus} sr.${task.process}.bam
+		"""
 }
 
