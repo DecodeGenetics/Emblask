@@ -148,14 +148,15 @@ getCoverageRegions() {
 	awk '{print $1 "\t" $3}' ${TMP_DIR}/contigs.bed > ${TMP_DIR}/contigs.dict
 
 	# Compute coverage for all primary and supplementary alignments with good mapq
-	${SAMTOOLS} depth -@ ${THREADS} -aa -Q 20 -J -G 3844 ${LR_BAM} > ${TMP_DIR}/cov.tsv
+	#${SAMTOOLS} depth -@ ${THREADS} -aa -Q 20 -J -G 3844 ${LR_BAM} > ${TMP_DIR}/cov.tsv
+	${SAMTOOLS} depth -@ ${THREADS} -aa -Q 20 -J -G 1796 ${LR_BAM} > ${TMP_DIR}/cov.tsv
 
 	# Compute mean, low and high coverage
 	MEAN_COV=$(awk '{SUM+=$3; COUNT+=1} END {print SUM/COUNT}' ${TMP_DIR}/cov.tsv)
 	HIGH_COV=$(echo -e "${MEAN_COV}" | awk '{print 1.4*$1}')
 
 	# Create BED file of low and high coverage regions
-	awk -v hicov=${HIGH_COV} '{if ($3>=hicov){print $1 "\t" ($2-1) "\t" $2}}' ${TMP_DIR}/cov.tsv > ${TMP_DIR}/hc.bed
+	awk -v hicov=${HIGH_COV} '{if ($3>=hicov){print $1 "\t" $2-1 "\t" $2}}' ${TMP_DIR}/cov.tsv > ${TMP_DIR}/hc.bed
 	rm -rf ${TMP_DIR}/cov.tsv
 
 	if [ -s ${TMP_DIR}/hc.bed ]
@@ -184,7 +185,7 @@ getCoverageRegions() {
 				LEN_REGION=$((END-START))
 
 				N50=$(${SAMTOOLS} view -@ $((THREADS-2)) -F 3844 ${LR_BAM} "${CONTIG}:${START}-${END}" | awk '{print length($10)}' | sort -rn | \
-					awk '{ sum += $0; print $0, sum }' | tac | awk 'NR==1 { halftot=$2/2 } lastsize>halftot && $2<halftot { print $1 } { lastsize=$2 }')
+					awk '{sum += $0; print $0, sum}' | tac | awk 'NR==1 { halftot=$2/2 } lastsize>halftot && $2<halftot { print $1 } { lastsize=$2 }')
 				N50_DIV_3=$((N50/3))
 
 				if [ ${LEN_REGION} -gt ${N50_DIV_3} ]
@@ -201,6 +202,7 @@ getCoverageRegions() {
 			then
 				${BEDTOOLS} slop -i ${TMP_DIR}/hc.merge.bed -g ${TMP_DIR}/contigs.dict -b 3000 | sort -k1,1 -k2,2n > ${TMP_DIR}/hc.merge.extend.bed
 				${BEDTOOLS} merge -i ${TMP_DIR}/hc.merge.extend.bed | awk '{if ($2<=5000) {print $1 "\t0\t" $3} else {print $0}}' > ${TMP_DIR}/hc.merge.bed # Regions starting near the contig start are extended to the contig start
+
 				rm -rf ${TMP_DIR}/hc.merge.extend.bed
 			
 				# Get regions which are not high coverage
@@ -212,12 +214,15 @@ getCoverageRegions() {
 				awk -v window_sz=${SZ_WINDOW} '{for (i=$2; i<$3; i+=window_sz) {MAX=$3; if ((i+window_sz)<$3){MAX=i+window_sz}; print $1 "\t" i "\t" MAX}}' ${TMP_DIR}/lmc.merge.bed > ${TMP_DIR}/lmc.merge.split.bed
 				mv -f ${TMP_DIR}/lmc.merge.split.bed ${TMP_DIR}/lmc.merge.bed
 			else
+
 				awk -v window_sz=${SZ_WINDOW} '{for (i=$2; i<$3; i+=window_sz) {MAX=$3; if ((i+window_sz)<$3){MAX=i+window_sz}; print $1 "\t" i "\t" MAX}}' ${TMP_DIR}/contigs.bed > ${TMP_DIR}/lmc.merge.bed
 			fi
 		else
+
 			awk -v window_sz=${SZ_WINDOW} '{for (i=$2; i<$3; i+=window_sz) {MAX=$3; if ((i+window_sz)<$3){MAX=i+window_sz}; print $1 "\t" i "\t" MAX}}' ${TMP_DIR}/contigs.bed > ${TMP_DIR}/lmc.merge.bed
 		fi
 	else
+
 		awk -v window_sz=${SZ_WINDOW} '{for (i=$2; i<$3; i+=window_sz) {MAX=$3; if ((i+window_sz)<$3){MAX=i+window_sz}; print $1 "\t" i "\t" MAX}}' ${TMP_DIR}/contigs.bed > ${TMP_DIR}/lmc.merge.bed
 	fi
 }
@@ -273,8 +278,10 @@ correctContigSLR() {
 			# Compute list of read names for alignments starting within the region
 			if [ ${LR_START_0} -eq 0 ]
 			then
+
 				cp ${TMP_DIR}/lr.${ID_FILE}.rnames ${TMP_DIR}/lr.${ID_FILE}.diff.rnames # Left boundary position is 0 -> start of the contig, no reads to discard
 			else
+
 				${SAMTOOLS} view -@ ${L_THREADS} ${TMP_DIR}/lr.${ID_FILE}.lo.bam | awk -v P_START=${LR_START_1} '{if ($4<P_START) {print $1}}' | sort > ${TMP_DIR}/lr.${ID_FILE}.lo.rnames
 				comm -23 ${TMP_DIR}/lr.${ID_FILE}.rnames ${TMP_DIR}/lr.${ID_FILE}.lo.rnames > ${TMP_DIR}/lr.${ID_FILE}.diff.rnames
 			fi
@@ -287,35 +294,39 @@ correctContigSLR() {
 
 			SR_START_0=$((LR_START_0-MAX_LEN_READ_LBORDER))
 			SR_START_0=$((SR_START_0>=0 ? SR_START_0 : 0))
-
+			
 			# Get SR extended coordinates from secondary alignment coordinates in LR
 			echo -e "${CONTIG}\t${SR_START_0}\t${SR_END_0}" > ${TMP_DIR}/sr.${ID_FILE}.bed
+
 			python ${GET_SUPP_ALIGN_PY} -t ${L_THREADS} -b ${LR_BAM} -r ${TMP_DIR}/lr.${ID_FILE}.rnames -s ${CONTIG} >> ${TMP_DIR}/sr.${ID_FILE}.bed
+
 			${BEDTOOLS} slop -b 1000 -i ${TMP_DIR}/sr.${ID_FILE}.bed -g ${TMP_DIR}/contigs.dict | sort -k1,1 -k2,2n > ${TMP_DIR}/sr.${ID_FILE}.2.bed
 			${BEDTOOLS} merge -d 1000 -i ${TMP_DIR}/sr.${ID_FILE}.2.bed > ${TMP_DIR}/sr.${ID_FILE}.bed
-			rm -rf ${TMP_DIR}/sr.${ID_FILE}.2.bed
-			
-			# Extract main BAMs
-			${SAMTOOLS} view -@ ${L_THREADS} -b -M -L ${TMP_DIR}/sr.${ID_FILE}.bed -q 1 -o ${TMP_DIR}/sr.${ID_FILE}.1.bam -U ${TMP_DIR}/sr.${ID_FILE}.2.bam ${SR_BAM}
-			${SAMTOOLS} index -@ ${L_THREADS} ${TMP_DIR}/sr.${ID_FILE}.1.bam
-			${SAMTOOLS} index -@ ${L_THREADS} ${TMP_DIR}/sr.${ID_FILE}.2.bam
-			# Extract FASTQs
-			python ${EXTRACT_READS_PY} -t ${L_THREADS} -b ${TMP_DIR}/sr.${ID_FILE}.1.bam -m 1 --include_supplementary --include_secondary --include_unmapped_mate | ${PIGZ_BIN} -p ${L_THREADS} -c > ${TMP_DIR}/sr.${ID_FILE}.1.fastq.gz
-			python ${EXTRACT_READS_PY} -t ${L_THREADS} -b ${TMP_DIR}/sr.${ID_FILE}.2.bam -m 0 --include_supplementary --include_secondary --include_unmapped_mate | ${PIGZ_BIN} -p ${L_THREADS} -c > ${TMP_DIR}/sr.${ID_FILE}.2.fastq.gz
 
-			#${SAMTOOLS} view -@ ${L_THREADS} -b -M -L ${TMP_DIR}/sr.${ID_FILE}.bed ${SR_BAM} -o ${TMP_DIR}/sr.${ID_FILE}.1.bam
-			#${SAMTOOLS} index -@ ${L_THREADS} ${TMP_DIR}/sr.${ID_FILE}.1.bam
-			#python ${EXTRACT_READS_PY} -t ${L_THREADS} -b ${TMP_DIR}/sr.${ID_FILE}.1.bam -m 0 --include_supplementary --include_secondary --include_unmapped_mate | ${PIGZ_BIN} -p ${L_THREADS} -c > ${TMP_DIR}/sr.${ID_FILE}.1.fastq.gz
+			rm -rf ${TMP_DIR}/sr.${ID_FILE}.2.bed
+
+			# Extract main BAMs
+			${SAMTOOLS} view -@ ${L_THREADS} -b -M -L ${TMP_DIR}/sr.${ID_FILE}.bed -q 1 -o ${TMP_DIR}/sr.${ID_FILE}.1.bam -U ${TMP_DIR}/sr.${ID_FILE}.u.bam ${SR_BAM}
+			
+			${SAMTOOLS} index -@ ${L_THREADS} ${TMP_DIR}/sr.${ID_FILE}.1.bam
+			${SAMTOOLS} index -@ ${L_THREADS} ${TMP_DIR}/sr.${ID_FILE}.u.bam
+			
+			# Extract FASTQs
+			python ${EXTRACT_BAM_PY} -t ${L_THREADS} -b ${TMP_DIR}/sr.${ID_FILE}.1.bam -m 1 --include_supplementary --include_secondary --include_unmapped_mate | \
+			${PIGZ_BIN} -p ${L_THREADS} -c > ${TMP_DIR}/sr.${ID_FILE}.1.fastq.gz
+			
+			python ${EXTRACT_BAM_PY} -t ${L_THREADS} -b ${TMP_DIR}/sr.${ID_FILE}.u.bam -m 0 --include_supplementary --include_secondary --include_unmapped_mate | \
+			${PIGZ_BIN} -p ${L_THREADS} -c > ${TMP_DIR}/sr.${ID_FILE}.u.fastq.gz
 
 			# Clean-up
 			rm -rf ${TMP_DIR}/sr.${ID_FILE}.*.bam* ${TMP_DIR}/sr.${ID_FILE}.*bed ${TMP_DIR}/lr.${ID_FILE}.rnames
 
-			HELPER_SR_RATATOSK="-u ${TMP_DIR}/sr.${ID_FILE}.2.fastq.gz"
+			HELPER_SR_RATATOSK="-u ${TMP_DIR}/sr.${ID_FILE}.u.fastq.gz"
 
 			if [ ! $(zcat ${TMP_DIR}/sr.${ID_FILE}.1.fastq.gz | head -n 1 | wc -c) -eq 0 ] # SR file 1 is not empty
 			then
 
-				if [ $(zcat ${TMP_DIR}/sr.${ID_FILE}.2.fastq.gz | head -n 1 | wc -c) -eq 0 ] # SR file 2 is empty
+				if [ $(zcat ${TMP_DIR}/sr.${ID_FILE}.u.fastq.gz | head -n 1 | wc -c) -eq 0 ] # SR file 2 is empty
 				then
 					HELPER_SR_RATATOSK=""
 				fi
@@ -328,12 +339,12 @@ correctContigSLR() {
 				mv -f ${LR_FILE_PREFIX}.fastq ${LR_FILE_PREFIX}.3.fastq
 
 				# Correction SR 2
-				${RATATOSK_K96} correct -c ${L_THREADS} -k 63 -K 95 -w 5000 -Q ${MAX_BQ} --force-io-order \
+				${RATATOSK_K96} correct -c ${L_THREADS} -k 45 -K 95 -w 5000 -Q ${MAX_BQ} --force-io-order \
 				-s ${TMP_DIR}/sr.${ID_FILE}.1.fastq.gz ${HELPER_SR_RATATOSK} -l ${LR_FILE_PREFIX}.3.fastq -o ${LR_FILE_PREFIX}
 				mv -f ${LR_FILE_PREFIX}.fastq ${LR_FILE_PREFIX}.3.fastq
 
 				# Correction LR 1
-				${RATATOSK_K128} correct -2 -c ${L_THREADS} -k 125 -K 127 -w 25000 -Q ${MAX_BQ} -i 20000 --no-snp-correction --force-io-order \
+				${RATATOSK_K128} correct -2 -c ${L_THREADS} -k 125 -K 127 -i 20000 -w 25000 -Q ${MAX_BQ} --no-snp-correction --force-io-order \
 				-s ${LR_FILE_PREFIX}.3.fastq -l ${LR_FILE_PREFIX}.3.fastq -L ${TMP_DIR}/lr.${ID_FILE}.fastq.gz -o ${LR_FILE_PREFIX}
 				mv -f ${LR_FILE_PREFIX}.fastq ${LR_FILE_PREFIX}.3.fastq
 
