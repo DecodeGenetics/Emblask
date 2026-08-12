@@ -4,39 +4,73 @@ import sys
 import pysam
 import argparse
 
+from pathlib import Path
+from intervaltree import Interval, IntervalTree
+
+def is_fully_contained(contig, start, end, regions_itv_d):
+
+	if (start < end) and (contig in regions_itv_d):
+	
+		for itv in regions_itv_d[contig][start:end]:
+		
+			if itv.begin <= start and itv.end >= end: return True
+			
+	return False
+
+def read_BED(fn):
+
+	contig_d = {}
+
+	with open(fn, 'r') as f:
+	
+		for line in f:
+		
+			tokens = line.split()
+			
+			if len(tokens) < 3: sys.exit("Input BED file " + fn + " is malformed, at least 1 line does not have 3 fields.")
+		
+			contig = tokens[0]
+			
+			pos_start_inc = int(tokens[1])
+			pos_end_excl = int(tokens[2])
+			
+			if contig not in contig_d: contig_d[contig] = IntervalTree()
+			
+			contig_d[contig][pos_start_inc:pos_end_excl] = None
+			
+	return contig_d
+
 # Extract all reads from primary, supplementary, secondary and/or unmapped alignment records from a BAM file
 # IMPORTANT: the reads must be aligned with soft-clipping to output the original reads (-Y option in minimap2)
-
-def extractReads(bam_fn, tag_values, no_tag, mapq, include_supplementary, include_secondary, include_unmapped_mate, include_unmapped_all, bam_output, include_read_list, exclude_read_list, threads_bam):
+def extractReads(bam_cram_fn, tag_values, no_tag, mapq, include_supplementary, include_secondary, include_unmapped_mate, include_unmapped_all, bam_output, include_read_list, exclude_read_list, threads_bam, contained_regions_itv_d = None, ref_fn = None):
 
 	seq = {} # Reads to output
 	bam_out = (bam_output != "") # Whether output file is BAM
 
-	rl_d = {} # Read list to include/exclude
+	rl_d = set() # Read list to include/exclude
+	
 	include_rl = False
 	exclude_rl = False
 
-	in_bamf = pysam.AlignmentFile(bam_fn, "rb", threads=threads_bam) # Open input BAM file
+	in_bamf = pysam.AlignmentFile(bam_cram_fn, "rb", reference_filename=ref_fn, threads=threads_bam) # Open input BAM file
 
 	if bam_out: out_bamf = pysam.AlignmentFile(bam_output, "wb", template=in_bamf, threads=threads_bam) # Open output BAM file
 
-	if (include_read_list != ""):
+	if include_read_list != None:
 
-		rl_fn = open(include_read_list, "r")
 		include_rl = True
+		
+		with open(include_read_list, "r") as rl_fn:
 
-		for line in rl_fn: rl_d[line.strip()] = None
+			for line in rl_fn: rl_d.add(line.strip())
 
-		rl_fn.close()
+	elif exclude_read_list != None:
 
-	elif (exclude_read_list != ""):
-
-		rl_fn = open(exclude_read_list, "r")
 		exclude_rl = True
+		
+		with open(exclude_read_list, "r") as rl_fn:
 
-		for line in rl_fn: rl_d[line.strip()] = None
-
-		rl_fn.close()
+			for line in rl_fn: rl_d.add(line.strip())
 
 	if (len(tag_values) == 0) and (len(no_tag) == 0): # No tag filter to consider
 
@@ -46,7 +80,7 @@ def extractReads(bam_fn, tag_values, no_tag, mapq, include_supplementary, includ
 			if (rec.query_length != 0) and (((not rec.is_unmapped) and (rec.mapping_quality >= mapq)) or (include_unmapped_all and rec.is_unmapped)):
 
 				# Record is not on an include/exclude list or record is on a list and matches a name on that list
-				if ((not include_rl) and (not exclude_rl)) or (include_rl and rec.query_name in rl_d) or (exclude_rl and rec.query_name not in rl_d):
+				if (not include_rl and not exclude_rl) or (include_rl and rec.query_name in rl_d) or (exclude_rl and rec.query_name not in rl_d):
 
 					is_primary = (not rec.is_supplementary and not rec.is_secondary and not rec.is_unmapped)
 
@@ -60,13 +94,15 @@ def extractReads(bam_fn, tag_values, no_tag, mapq, include_supplementary, includ
 
 						# Record name was unseen before or mate was unseen before
 						if bam_out or (not paired and not curr[0]) or (rec.is_read1 and not curr[0]) or (rec.is_read2 and not curr[1]):
+						
+							if (contained_regions_itv_d == None) or is_fully_contained(rec.reference_name, rec.reference_start, rec.reference_end, contained_regions_itv_d):
 
-							# Add record name or mate to dictionnary 
-							seq[rec.query_name] = (not paired or rec.is_read1 or curr[0], rec.is_read2 or curr[1])
+								# Add record name or mate to dictionnary 
+								seq[rec.query_name] = (not paired or rec.is_read1 or curr[0], rec.is_read2 or curr[1])
 
-							if bam_out: out_bamf.write(rec) # Write to output BAM
-							elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
-							else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
+								if bam_out: out_bamf.write(rec) # Write to output BAM
+								elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
+								else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
 
 	else:
 
@@ -125,25 +161,29 @@ def extractReads(bam_fn, tag_values, no_tag, mapq, include_supplementary, includ
 										break		
 
 							if has_tag_value or has_no_tag:
+							
+								if (contained_regions_itv_d == None) or is_fully_contained(rec.reference_name, rec.reference_start, rec.reference_end, contained_regions_itv_d):
 
-								# Add record name or mate to dictionnary 
-								seq[rec.query_name] = (not paired or rec.is_read1 or curr[0], rec.is_read2 or curr[1])
+									# Add record name or mate to dictionnary 
+									seq[rec.query_name] = (not paired or rec.is_read1 or curr[0], rec.is_read2 or curr[1])
 
-								if bam_out: out_bamf.write(rec) # Write to output BAM
-								elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
-								else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
+									if bam_out: out_bamf.write(rec) # Write to output BAM
+									elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
+									else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
 
 					elif (include_unmapped_all and rec.is_unmapped): # Record is unmapped
+					
+						if contained_regions_itv_d == None:
 
-						if bam_out: out_bamf.write(rec) # Write to output BAM
-						elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
-						else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
+							if bam_out: out_bamf.write(rec) # Write to output BAM
+							elif rec.query_qualities: print("@" + rec.query_name + "\n" + rec.query_sequence + "\n+\n" + ''.join(map(lambda x: chr(x+33), rec.query_qualities))) # FASTQ output
+							else: print(">" + rec.query_name + "\n" + rec.query_sequence) # FASTA output
 
 	in_bamf.close()
 
 	if (include_unmapped_mate): # Get unmapped reads for which the other mate of the pair has a mapped primary alignment
 
-		in_bamf = pysam.AlignmentFile(bam_fn, "rb", threads=threads_bam)
+		in_bamf = pysam.AlignmentFile(bam_cram_fn, "rb", reference_filename=ref_fn, threads=threads_bam)
 
 		for rec in in_bamf.fetch(until_eof=True):
 
@@ -164,16 +204,17 @@ def extractReads(bam_fn, tag_values, no_tag, mapq, include_supplementary, includ
 if __name__ == "__main__":
 
 	# Parse arguments
-	parser = argparse.ArgumentParser(prog='extractReadsFromBAM', description='Extract all reads from primary, supplementary and secondary alignments from a BAM file', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser = argparse.ArgumentParser(prog='extractReadsFromBAM', description='Extract all reads from primary, supplementary and secondary alignments from a BAM/CRAM file', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 	required = parser.add_argument_group('Required arguments')
 
-	required.add_argument('-b', '--in_bam', action='store', help='BAM filename', required=True)
+	required.add_argument('-b', '--in_bam_cram', action='store', help='BAM or CRAM filename. If CRAM, reference genome filename must be supplied with -r.', required=True)
 
 	optional = parser.add_argument_group('Optional arguments')
 
-	optional.add_argument('-l', '--include_read_list', action='store', help='Name of reads to include', default="", required=False)
-	optional.add_argument('-L', '--exclude_read_list', action='store', help='Name of reads to exclude', default="", required=False)
+	optional.add_argument('-c', '--include_fully_contained', action='store', help='Only output reads for which the aligned part is fully contained in the regions of the BED file', required=False)
+	optional.add_argument('-l', '--include_read_list', action='store', help='Name of reads to include', required=False)
+	optional.add_argument('-L', '--exclude_read_list', action='store', help='Name of reads to exclude', required=False)
 	optional.add_argument('-i', '--include_tag_value', action='append', help='Only output reads for which at least one alignment has this tag name and value. Must be "name:type:value".', default=[], required=False)
 	optional.add_argument('-I', '--include_no_tag', action='append', help='Only output reads for which at least one alignment does NOT have this tag name', default=[], required=False)
 	optional.add_argument('-m', '--mapq', action='store', help='Only consider alignments with this minimum quality.', type=int, default=0, required=False)
@@ -183,11 +224,16 @@ if __name__ == "__main__":
 	optional.add_argument('-U', '--include_unmapped_all', action='store_true', help='Output all unmapped reads (regardless of tag values if -i was used).', default=False, required=False)
 	optional.add_argument('-B', '--bam_output', action='store', help='Write to BAM file instead of FASTA/FASTQ on stdout', default="", required=False)
 	optional.add_argument('-t', '--threads', action='store', help='Number of threads for compressing/decompressing BAM', type=int, default=1, required=False)
+	optional.add_argument('-r', '--ref_genome', action='store', help='Reference genome filename. Mandatory if input is CRAM.', required=False)
 
 	args = parser.parse_args()
 
-	if ((args.include_read_list != "") and (args.exclude_read_list != "")): sys.exit("Cannot use -l and -L (--include_read_list and --exclude_read_list) at the same time.")
-	if (args.include_unmapped_mate and args.include_unmapped_all): sys.exit("Cannot use -u and -U (--include_unmapped_mate and --include_unmapped_all) at the same time.")
+	if (args.include_read_list != None) and (args.exclude_read_list != None): sys.exit("Cannot use -l and -L (--include_read_list and --exclude_read_list) at the same time.")
+	if args.include_unmapped_mate and args.include_unmapped_all: sys.exit("Cannot use -u and -U (--include_unmapped_mate and --include_unmapped_all) at the same time.")
+	if (Path(args.in_bam_cram).suffix.lower() == ".cram") and (args.ref_genome == None): sys.exit("CRAM input detected based on file extension: a reference genome must be supplied with -r.")
+	
+	fully_contained_regions_d = None if args.include_fully_contained == None else read_BED(args.include_fully_contained)
 
 	# Do what you got to do
-	extractReads(args.in_bam, args.include_tag_value, args.include_no_tag, args.mapq, args.include_supplementary, args.include_secondary, args.include_unmapped_mate, args.include_unmapped_all, args.bam_output, args.include_read_list, args.exclude_read_list, args.threads)
+	extractReads(args.in_bam_cram, args.include_tag_value, args.include_no_tag, args.mapq, args.include_supplementary, args.include_secondary, args.include_unmapped_mate, args.include_unmapped_all,
+			args.bam_output, args.include_read_list, args.exclude_read_list, args.threads, contained_regions_itv_d = fully_contained_regions_d, ref_fn = args.ref_genome)
