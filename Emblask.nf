@@ -50,7 +50,8 @@ process filterONT {
 
 			\${samtools} bam2fq -n -@ ${a_cpus} ${bam_in} | \${pigz} -p ${b_cpus} -c > lr.fq.gz;
 			python \${filter_fastq_py} -f lr.fq.gz -t ${a_cpus} -c 1000 -l ${params.pipeline.min_len_read} -b \${MAX_BQ} \
-			-w ${params.pipeline.fastq_filter.len_window_baseq_filter} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter} | \
+			-w ${params.pipeline.fastq_filter.len_window_baseq_filter_split} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter_split} \
+			-W ${params.pipeline.fastq_filter.len_window_baseq_filter_mask} -R ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter_mask} | \
 			\${pigz} -p ${b_cpus} -c > lr.${task.process}.fq.gz;
 			rm -rf reads.fq.gz;
 			"""
@@ -64,7 +65,8 @@ process filterONT {
 			MAX_BQ=\$(bc -l <<< \"${params.pipeline.fastq_filter.min_baseq_ratio} * ${params.max_lr_bq}\" | awk '{printf(\"%.0f\", \$0)}') 
 
 			python \${filter_fastq_py} -f ${fastq_in} -t ${a_cpus} -c 1000 -l ${params.pipeline.min_len_read} -b \${MAX_BQ} \
-			-w ${params.pipeline.fastq_filter.len_window_baseq_filter} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter} | \
+			-w ${params.pipeline.fastq_filter.len_window_baseq_filter_split} -r ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter_split} \
+			-W ${params.pipeline.fastq_filter.len_window_baseq_filter_mask} -R ${params.pipeline.fastq_filter.ratio_low_baseq_window_filter_mask} | \
 			\${pigz} -p ${b_cpus} -c > lr.${task.process}.fq.gz;
 			"""
 		}
