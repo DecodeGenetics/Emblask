@@ -54,8 +54,6 @@ process var_CallFilterPhase {
 		def skipHaplotypeBAM_opt = skipHaplotypeBAM == true ? "--skipHaplotypeBAM" : ''
 
 		"""
-		bcftools=\${BCFTOOLS:-${params.tools.bcftools.bin}}
-
 		mkdir -p margin
 
 		run_pepper_margin_deepvariant call_variant -b lr.bam -f ${asm_fa} -o pepper -t ${task.cpus} -s Sample \
@@ -64,14 +62,14 @@ process var_CallFilterPhase {
 		if [ -s ${var_regions_bed_bash} ]
 		then
 
-			\${bcftools} view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & \
+			bcftools view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & \
 			(AD>=${params.pipeline.variant_filter.min_ad}) & (VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" \
-			-R ${var_regions_bed_bash} -Oz pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz | \${bcftools} sort -Oz -o pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
+			-R ${var_regions_bed_bash} -Oz pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz | bcftools sort -Oz -o pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
 		else
 
-			\${bcftools} view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & \
+			bcftools view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & \
 			(AD>=${params.pipeline.variant_filter.min_ad}) & (VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" \
-			-Oz pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz | \${bcftools} sort -Oz -o pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
+			-Oz pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz | bcftools sort -Oz -o pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
 		fi
 
 		tabix -p vcf pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
@@ -79,7 +77,7 @@ process var_CallFilterPhase {
 		margin phase lr.bam ${asm_fa} pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz ${projectDir}/${params.pmdv.r08.margin.config} \
 		-t ${task.cpus} -o margin/MARGIN_PHASED ${skipHaplotypeBAM_opt}
 
-		\${bcftools} view -Oz -o margin/MARGIN_PHASED.phased.vcf.gz margin/MARGIN_PHASED.phased.vcf
+		bcftools view -Oz -o margin/MARGIN_PHASED.phased.vcf.gz margin/MARGIN_PHASED.phased.vcf
 		tabix -p vcf margin/MARGIN_PHASED.phased.vcf.gz;
 
 		rm -rf margin/MARGIN_PHASED.phased.vcf
@@ -156,13 +154,11 @@ process varPhase {
 		def skipHaplotypeBAM_opt = (skipHaplotypeBAM == true) ? "--skipHaplotypeBAM" : ''
 
 		"""
-		bcftools=\${BCFTOOLS:-${params.tools.bcftools.bin}}
-
 		mkdir -p margin
 
 		margin phase lr.bam ${asm_fa} lr.asm.vcf.gz ${projectDir}/${params.pmdv.r08.margin.config} -t ${task.cpus} -o margin/MARGIN_PHASED ${skipHaplotypeBAM_opt}
 
-		\${bcftools} view -Oz -o margin/MARGIN_PHASED.phased.vcf.gz margin/MARGIN_PHASED.phased.vcf
+		bcftools view -Oz -o margin/MARGIN_PHASED.phased.vcf.gz margin/MARGIN_PHASED.phased.vcf
 		tabix -p vcf margin/MARGIN_PHASED.phased.vcf.gz;
 
 		rm -rf margin/MARGIN_PHASED.phased.vcf
