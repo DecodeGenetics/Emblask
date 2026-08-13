@@ -1346,7 +1346,7 @@ process hapResAsmPolish_polishDualAsm_3 {
 	parallel -j ${task.cpus} \"\
 		\${samtools} view -b sr.bam {} > polishing/{#}.bam; \
 		\${samtools} index polishing/{#}.bam; \
-		\${seqtk} subseq ${asm_fa} <(echo -e {}) > polishing/{#}.fasta;
+		\${seqtk} subseq ${asm_fa} <(echo -e {}) > polishing/{#}.fasta; \
 		\${bcftools} mpileup -Ou -f ${asm_fa} polishing/{#}.bam | \${bcftools} call -mv -Ou | \${bcftools} view --exclude 'GT==\\"het\\"' -Oz -o polishing/{#}.vcf.gz; \
 		tabix -p vcf polishing/{#}.vcf.gz; \
 		cat polishing/{#}.fasta | \${bcftools} consensus polishing/{#}.vcf.gz > polishing/{}.fasta; \
