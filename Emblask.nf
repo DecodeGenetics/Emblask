@@ -36,7 +36,7 @@ process filterONT {
 		
 		def a_cpus_tmp = Math.max(1, Math.round(task.cpus * a2b_cpu_ratio) as int)
 		
-		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp)
+		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp))
 		def a_cpus = Math.max(1, task.cpus - b_cpus)
 
 		if (bam_in) {
@@ -134,7 +134,7 @@ process extractPairedIllumina {
 		
 		def a_cpus_tmp = Math.max(1, Math.round(task.cpus * a2b_cpu_ratio) as int)
 		
-		def b_cpus = Math.min(b_cpu_max, Math.max(1, task.cpus - a_cpus_tmp)
+		def b_cpus = Math.min(b_cpu_max, Math.max(1, task.cpus - a_cpus_tmp))
 		def a_cpus = Math.max(1, task.cpus - b_cpus)
 		
 		"""
@@ -1107,7 +1107,7 @@ process hapResAsmPolish_extractPhased {
 		
 		def a_cpus_tmp = Math.max(1, Math.round(task.cpus * a2b_cpu_ratio) as int)
 		
-		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp)
+		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp))
 		def a_cpus = Math.max(1, task.cpus - b_cpus)
 		
 		"""
@@ -1168,7 +1168,7 @@ process hapResAsmPolish_getCollapsedHom {
 		// 66% of the cores for A
 		def a_cpus_tmp = Math.max(1, Math.round(task.cpus * a2b_cpu_ratio) as int)
 		// 34% of the cores for B but cannot exceed 4 cores
-		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp)
+		def b_cpus = Math.min(not_a_max_cpus, Math.max(1, task.cpus - a_cpus_tmp))
 		// 66% of the cores or all the cores minus 4 for A
 		def a_cpus = Math.max(1, task.cpus - b_cpus)
 		// All the cores of B minus 1
@@ -1181,7 +1181,7 @@ process hapResAsmPolish_getCollapsedHom {
 		// Half of the 34% of the cores but cannot exceed 4 cores for C
 		def c_cpus2 = Math.min(not_a_max_cpus,  Math.max(1, bc_cpus_tmp - b_cpus2))
 		// All the cores minus whatever command B and C are using for A
-		def a_cpus2 = Math.max(1, task.cpus - b_cpus2 - c_cpus2)	
+		def a_cpus2 = Math.max(1, task.cpus - b_cpus2 - c_cpus2)
 		
 		"""
 		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
