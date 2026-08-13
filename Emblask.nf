@@ -1195,13 +1195,13 @@ process hapResAsmPolish_getCollapsedHom {
 
 		python \${extract_reads_py} -t ${task.cpus} -b lr.hap.phasedSupp2prim.bam -i HP:i:0 -I HP -B lr.hap.unphased.bam
 		\${samtools} index -@ ${task.cpus} lr.hap.unphased.bam
-		bcftools query -i \"(type=='snp') & (PS>=0)\" -f '%CHROM\t%POS0\t%END\n' lr.hap.vcf.gz > lr.hap.phased.bed
+		\${bcftools} query -i \"(type=='snp') & (PS>=0)\" -f '%CHROM\t%POS0\t%END\n' lr.hap.vcf.gz > lr.hap.phased.bed
 		\${samtools} depth -@ ${a_cpus_minus1} -a -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} -b lr.hap.phased.bed lr.hap.phasedSupp2prim.bam | \
 		awk '{print \$1 \"\\t\" \$2 \"\\t\" (\$2+1) \"\\t\" \$3}' > lr.hap.phased.bed.tmp
 		mv -f lr.hap.phased.bed.tmp lr.hap.phased.bed
 		awk 'BEGIN {i=1} {SUM+=\$4; COUNT+=1; SAMP[i]=\$4; i+=1} END {MEAN=SUM/COUNT; SUMSQ=0; for (i=1; i<=COUNT; i++) {SUMSQ+=(SAMP[i]-MEAN)^2}; print MEAN \"\\t\" sqrt(SUMSQ/COUNT)}' lr.hap.phased.bed > cov_stdev.tsv
 		COV=\$(awk '{print \$1}' cov_stdev.tsv); STDEV_COV=\$(awk '{print \$2}' cov_stdev.tsv)
-		python ${params.python.script.extract_ref_reads} -t ${task.cpus} -b lr.hap.phasedSupp2prim.bam -v lr.hap.vcf.gz -B lr.hap.ref.bam --only_include_phased --include_supplementary;
+		python \${extract_ref_reads_py} -t ${task.cpus} -b lr.hap.phasedSupp2prim.bam -v lr.hap.vcf.gz -B lr.hap.ref.bam --only_include_phased --include_supplementary;
 		\${samtools} index -@ ${task.cpus} lr.hap.ref.bam
 		join <(\${samtools} depth -@ ${a_cpus_half_minus2} -aa -J -Q ${params.pipeline.min_mapq.strict} -G ${params.pipeline.samtools.depth.filter_sec} -b lr.hap.phased.bed lr.hap.ref.bam | \
 		awk '{print \$1 \"\\t\" \$2 \"\\t\" \$3}' | sort -k1,1 -k2,2n) \
