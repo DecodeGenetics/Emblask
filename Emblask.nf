@@ -1460,15 +1460,16 @@ process hapResAsmPolish_polishDualAsm_3 {
 		mkdir -p polishing
 
 		cut -f1 ${asm_fai} | \
-		parallel -j ${task.cpus} \"\
-			\${samtools} view -b sr.bam {} > polishing/{#}.bam; \
-			\${samtools} index polishing/{#}.bam; \
-			\${seqtk} subseq ${asm_fa} <(echo -e {}) > polishing/{#}.fasta; \
-			\${bcftools} mpileup -Ou -f ${asm_fa} polishing/{#}.bam | \${bcftools} call -mv -Ou | \${bcftools} view --exclude 'GT==\\"het\\"' -Oz -o polishing/{#}.vcf.gz; \
-			tabix -p vcf polishing/{#}.vcf.gz; \
-			cat polishing/{#}.fasta | \${bcftools} consensus polishing/{#}.vcf.gz > polishing/{}.fasta; \
-			rm -rf polishing/{#}.*; \
-		\"
+		xargs -n1 -P${task.cpus} bash -c \"\
+			contig=\\\$1; \
+			\${samtools} view -b sr.bam \\\$contig > polishing/tmp.\\\$contig.bam; \
+			\${samtools} index polishing/tmp.\\\$contig.bam; \
+			\${seqtk} subseq ${asm_fa} <(echo -e \\"\\\$contig\\") > polishing/tmp.\\\$contig.fasta; \
+			\${bcftools} mpileup -Ou -f ${asm_fa} polishing/tmp.\\\$contig.bam | \${bcftools} call -mv -Ou | \${bcftools} view --exclude 'GT==\\"het\\"' -Oz -o polishing/tmp.\\\$contig.vcf.gz; \
+			tabix -p vcf polishing/tmp.\\\$contig.vcf.gz; \
+			cat polishing/tmp.\\\$contig.fasta | \${bcftools} consensus polishing/tmp.\\\$contig.vcf.gz > polishing/\\\$contig.fasta; \
+			rm -rf polishing/tmp.\\\$contig.*; \
+		\" _
 
 		cat polishing/H1#*.fasta > H1.fasta
 		cat polishing/H2#*.fasta > H2.fasta
