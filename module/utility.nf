@@ -64,7 +64,6 @@ process var_CallFilterPhase {
 
 		if [ -s ${var_regions_bed_bash} ]
 		then
-
 			bcftools view -i \"(type=='snp') && (FILTER=='PASS') && ((GT=='AR') & (GQ>=${params.pipeline.variant_filter.min_gq}) & \
 			(AD>=${params.pipeline.variant_filter.min_ad}) & (VAF>=${params.pipeline.variant_filter.min_vaf}) & (VAF<=${params.pipeline.variant_filter.max_vaf}))\" \
 			-R ${var_regions_bed_bash} -Oz pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz | bcftools sort -Oz -o pepper/PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.filtered.vcf.gz
@@ -133,7 +132,17 @@ process varCall_ontR9_trainedModels {
 		run_pepper_margin_deepvariant call_variant -b lr.bam -f ${asm_fa} -o . -t ${task.cpus} -s Sample --ont_r9_guppy5_sup \
 		--pepper_model ${model_snp} --pepper_hp_model ${model_hp} --dv_model ${model_dv} \
 		--pepper_min_mapq ${params.pipeline.min_mapq.strict} --dv_min_mapping_quality ${params.pipeline.min_mapq.strict} \
-		--pepper_include_supplementary --no_pepper_quantized
+		--pepper_include_supplementary --no_pepper_quantized || {
+			# PEPPER found no candidates to call which is not necessarily incorrect in case this variant calling
+			# is part of a polishing strategy where there no data to be used for the polishing.
+			# The following is to detect this use case, avoid trigger the "set -e" and just copy as (fake) output the input assembly
+			PMDV_EXIT_CODE=\$?
+		
+			[ -s PEPPER_VARIANT_OUTPUT_VARIANT_CALLING.vcf.gz ] && [ -s logs/2_margin_haplotag.log ] && [ \"\$(tail -n 1 logs/2_margin_haplotag.log)\" == \"No valid VCF entries found!\" ] || exit \${PMDV_EXIT_CODE}
+
+			bcftools view -h -Oz -o PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz PEPPER_VARIANT_OUTPUT_VARIANT_CALLING.vcf.gz
+			tabix -p vcf PEPPER_MARGIN_DEEPVARIANT_FINAL_OUTPUT.vcf.gz
+		}
 		"""
 }
 

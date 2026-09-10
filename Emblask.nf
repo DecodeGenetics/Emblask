@@ -2,13 +2,13 @@
 
 nextflow.enable.dsl=2
 
-include { mapLRtoAsm as mapLRtoAsm_1; mapLRtoAsm as mapLRtoAsm_2 } from './module/main.nf'
-include { var_CallFilterPhase as var_CallFilterPhase_1; var_CallFilterPhase as var_CallFilterPhase_2 } from './module/main.nf'
-include { varCall_hifi as hapResAsmPolish_phase_varCall } from './module/main.nf'
-include { varCall_ontR9_trainedModels as mixHapAsm_filter_call; varCall_ontR9_trainedModels as hapResAsmPolish_polishDualAsm_call } from './module/main.nf'
-include { varPhase as mixHapAsm_filter_phase; varPhase as hapResAsmPolish_phase_varPhase1; varPhase as hapResAsmPolish_phase_varPhase2 } from './module/main.nf'
-include { mapPairedIllumina as mapPairedIllumina_correct; mapPairedIllumina as mapPairedIllumina_polish } from './module/main.nf'
-include { mergePairedIlluminaBAM as mergePairedIlluminaBAM_correct; mergePairedIlluminaBAM as mergePairedIlluminaBAM_polish } from './module/main.nf'
+include { mapLRtoAsm as mapLRtoAsm_1; mapLRtoAsm as mapLRtoAsm_2 } from './module/utility.nf'
+include { var_CallFilterPhase as var_CallFilterPhase_1; var_CallFilterPhase as var_CallFilterPhase_2 } from './module/utility.nf'
+include { varCall_hifi as hapResAsmPolish_phase_varCall } from './module/utility.nf'
+include { varCall_ontR9_trainedModels as mixHapAsm_filter_call; varCall_ontR9_trainedModels as hapResAsmPolish_polishDualAsm_call } from './module/utility.nf'
+include { varPhase as mixHapAsm_filter_phase; varPhase as hapResAsmPolish_phase_varPhase1; varPhase as hapResAsmPolish_phase_varPhase2 } from './module/utility.nf'
+include { mapPairedIllumina as mapPairedIllumina_correct; mapPairedIllumina as mapPairedIllumina_polish } from './module/utility.nf'
+include { mergePairedIlluminaBAM as mergePairedIlluminaBAM_correct; mergePairedIlluminaBAM as mergePairedIlluminaBAM_polish } from './module/utility.nf'
 
 /*
 Basic quality filtering on corrected ONT reads stored in FASTQ or BAM.
@@ -701,8 +701,8 @@ process hapResAsm_polish2 {
 		if [ ! \$? -eq 0 ]; then echo \"File MARGIN_PHASED.haplotagged.polish.bam is malformed\" 1>&2; exit 1; fi
 		\${samtools} index -@ ${task.cpus} MARGIN_PHASED.haplotagged.polish.bam
 		
-		mkdir -p detectCorruptPS
-		cd detectCorruptPS
+		mkdir -p detectCorruptPS; cd detectCorruptPS;
+		
 		python \${get_ps_info_py} -v ../hap_lr_splitPS.vcf.gz | \
 		awk '{SUM=\$5+\$6; if (((\$5>\$6) && (\$5/SUM<0.75)) || ((\$6>=\$5) && (\$6/SUM<0.75))) {print \$1 \"\\t\" \$2 \"\\t\" \$3}}' > MARGIN_PHASED.corrupt_ps.bed
 		\${bedtools} subtract -a ../${asm_bed} -b MARGIN_PHASED.corrupt_ps.bed | sort -k1,1 -k2,2n > MARGIN_PHASED.no_corrupt_ps.bed
@@ -715,18 +715,47 @@ process hapResAsm_polish2 {
 			python \${extract_reads_within_py} -t ${task.cpus} -b ../MARGIN_PHASED.haplotagged.polish.bam -r MARGIN_PHASED.no_corrupt_ps.bed -B MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam -s -S
 			\${samtools} index -@ ${task.cpus} MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam
 
-			\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.corruptPS.bam -t ${task.cpus} -o flye.polish.corruptPS
-			\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.corruptPS/polished_1.fasta > flye.polish.corruptPS/polished_1.tmp.fasta
+			\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.corruptPS.bam -t ${task.cpus} -o flye.polish.corruptPS || {
+			
+				# Sometimes, there is nothing to polish and Flye might/will crash
+				# The following is to detect this use case, avoid trigger the "set -e" and just copy as (fake) output the input assembly
+				FLYE_EXIT_CODE=\$?
+			
+				[ -s flye.polish.corruptPS/flye.log ] && grep -qF -- \"Generated 0 bubbles\" \"flye.polish.corruptPS/flye.log\" || exit \${FLYE_EXIT_CODE}
 
+				cp ../${asm_fa} flye.polish.corruptPS/polished_1.fasta
+			}
+			
+			\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.corruptPS/polished_1.fasta > flye.polish.corruptPS/polished_1.tmp.fasta
 			mv -f flye.polish.corruptPS/polished_1.tmp.fasta flye.polish.corruptPS/polished_1.fasta
 
-			\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam -t ${task.cpus} -o flye.polish.noCorruptPS
+			\${flye} --polish-target ../${asm_fa} --nano-hq MARGIN_PHASED.haplotagged.polish.noCorruptPS.bam -t ${task.cpus} -o flye.polish.noCorruptPS || {
+			
+				# Sometimes, there is nothing to polish and Flye might/will crash
+				# The following is to detect this use case, avoid trigger the "set -e" and just copy as (fake) output the input assembly
+				FLYE_EXIT_CODE=\$?
+			
+				[ -s flye.polish.noCorruptPS/flye.log ] && grep -qF -- \"Generated 0 bubbles\" \"flye.polish.noCorruptPS/flye.log\" || exit \${FLYE_EXIT_CODE}
+
+				cp ../${asm_fa} flye.polish.noCorruptPS/polished_1.fasta
+			}
+			
 			\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.noCorruptPS/polished_1.fasta > flye.polish.noCorruptPS/polished_1.tmp.fasta
 			mv -f flye.polish.noCorruptPS/polished_1.tmp.fasta flye.polish.noCorruptPS/polished_1.fasta
 
 			cat flye.polish.corruptPS/polished_1.fasta flye.polish.noCorruptPS/polished_1.fasta | awk 'BEGIN {ID=0} {if (substr(\$0,1,1)==\">\") {print \">contig_\" ID; ID+=1} else {print \$0}}' > asm.polished.fasta
 		else
-			\${flye} --polish-target ../${asm_fa} --nano-hq ../MARGIN_PHASED.haplotagged.polish.bam -t ${task.cpus} -o flye.polish.noCorruptPS
+			\${flye} --polish-target ../${asm_fa} --nano-hq ../MARGIN_PHASED.haplotagged.polish.bam -t ${task.cpus} -o flye.polish.noCorruptPS || {
+			
+				# Sometimes, there is nothing to polish and Flye might/will crash
+				# The following is to detect this use case, avoid trigger the "set -e" and just copy as (fake) output the input assembly
+				FLYE_EXIT_CODE=\$?
+			
+				[ -s flye.polish.noCorruptPS/flye.log ] && grep -qF -- \"Generated 0 bubbles\" \"flye.polish.noCorruptPS/flye.log\" || exit \${FLYE_EXIT_CODE}
+
+				cp ../${asm_fa} flye.polish.noCorruptPS/polished_1.fasta
+			}
+			
 			\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.noCorruptPS/polished_1.fasta > flye.polish.noCorruptPS/polished_1.tmp.fasta
 			mv -f flye.polish.noCorruptPS/polished_1.tmp.fasta flye.polish.noCorruptPS/polished_1.fasta
 
@@ -992,7 +1021,15 @@ process hapResAsmPolish_polishAlt {
 		mv -f hap_lr_polish.alt.sorted.bam hap_lr_polish.alt.bam
 		\${samtools} index -@ ${task.cpus} hap_lr_polish.alt.bam
 
-		\${flye} --polish-target ${asm_fa} --nano-hq hap_lr_polish.alt.bam -t ${task.cpus} -o flye.polish.alt
+		\${flye} --polish-target ${asm_fa} --nano-hq hap_lr_polish.alt.bam -t ${task.cpus} -o flye.polish.alt || {
+			# Sometimes, there is nothing to polish and Flye might/will crash
+			# The following is to detect this use case, avoid trigger the "set -e" and just copy as (fake) output the input assembly
+			FLYE_EXIT_CODE=\$?
+		
+			[ -s flye.polish.alt/flye.log ] && grep -qF -- \"Generated 0 bubbles\" \"flye.polish.alt/flye.log\" || exit \${FLYE_EXIT_CODE}
+
+			cp ${asm_fa} flye.polish.alt/polished_1.fasta
+		}
 
 		cat ${asm_fa} <(\${seqkit} seq -w0 -m${params.pipeline.min_len_collapsed_segment} flye.polish.alt/polished_1.fasta | \
 		awk '{if (substr(\$1,1,1)==\">\"){print \$1 \"_alt\"} else {print \$0}}') > asm.${task.process}.fasta
@@ -1116,9 +1153,21 @@ process hapResAsmPolish_extractPhased {
 
 		extract_ref_reads_py=\${EXTRACT_REF_READS_PY:-${params.python.script.extract_ref_reads}}
 
-		\${samtools} view -@ ${task.cpus} -b -M -L h1.bed -o h1.bam lr.hap.bam
+		if [ -s h1.bed ]
+		then
+			\${samtools} view -@ ${task.cpus} -b -M -L h1.bed -o h1.bam lr.hap.bam
+		else
+			\${samtools} view -H lr.hap.bam | \${samtools} view -b -o h1.bam -
+		fi
+		
+		if [ -s h2.bed ]
+		then
+			\${samtools} view -@ ${task.cpus} -b -M -L h2.bed -o h2.bam lr.hap.bam
+		else
+			\${samtools} view -H lr.hap.bam | \${samtools} view -b -o h2.bam -
+		fi
+		
 		\${samtools} index -@ ${task.cpus} h1.bam
-		\${samtools} view -@ ${task.cpus} -b -M -L h2.bed -o h2.bam lr.hap.bam
 		\${samtools} index -@ ${task.cpus} h2.bam
 
 		python \${extract_ref_reads_py} -t ${a_cpus} -b h1.bam -v lr.hap.vcf.gz -p | \${pigz} -p ${b_cpus} -c > h1.hap.fastq.gz
@@ -1257,14 +1306,25 @@ process hapResAsmPolish_getCollapsedHom {
 		{MAX_COV=MAX_COV_GLOB; if (\$1 in MAX_COV_LOC){MAX_COV=MAX_COV_LOC[\$1]}; if (\$3>=MAX_COV) {if ((\$1==CONTIG) && (\$2==POS_E)) {POS_E+=1} else \
 		{ if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_collapsed_segment})) {print CONTIG \"\\t\" (POS_S-1) \"\\t\" (POS_E-1)}; CONTIG=\$1; POS_S=\$2; POS_E=\$2+1}}}} \
 		END {if ((POS_S!=-1) && (POS_E-POS_S>=${params.pipeline.min_len_collapsed_segment})) {print CONTIG \"\\t\" (POS_S-1) \"\\t\" (POS_E-1)}}' > lr.hap.collapsed.bed
+		
+		if [ -s lr.hap.collapsed.bed ]
+		then
+			\${samtools} view -@ ${task.cpus} -b -M -L lr.hap.collapsed.bed -o lr.hap.unphased.collapsed.bam lr.hap.unphased.bam
+			\${samtools} index -@ ${task.cpus} lr.hap.unphased.collapsed.bam
 
-		\${samtools} view -@ ${task.cpus} -b -M -L lr.hap.collapsed.bed -o lr.hap.unphased.collapsed.bam lr.hap.unphased.bam
-		\${samtools} index -@ ${task.cpus} lr.hap.unphased.collapsed.bam
+			\${samtools} bam2fq -@ ${a_cpus_minus1} -n lr.hap.unphased.collapsed.bam | awk '{if (NR%4==1){print substr(\$0,2,length(\$0)-1)}}' > lr.hap.collapsed.list
+			rm -rf lr.hap.unphased.collapsed.bam*
+		else
+			touch lr.hap.collapsed.list
+		fi
+		
+		if [ -s lr.hap.phased.cov.1.bed ]
+		then
+			\${samtools} view -@ ${task.cpus} -b -M -L lr.hap.phased.cov.1.bed lr.hap.unphased.bam > lr.hap.unphased.hom_candidates.bam
+		else
+			\${samtools} view -H lr.hap.unphased.bam | \${samtools} view -b -o lr.hap.unphased.hom_candidates.bam -
+		fi
 
-		\${samtools} bam2fq -@ ${a_cpus_minus1} -n lr.hap.unphased.collapsed.bam | awk '{if (NR%4==1){print substr(\$0,2,length(\$0)-1)}}' > lr.hap.collapsed.list
-		rm -rf lr.hap.unphased.collapsed.bam*
-
-		\${samtools} view -@ ${task.cpus} -b -M -L lr.hap.phased.cov.1.bed lr.hap.unphased.bam > lr.hap.unphased.hom_candidates.bam
 		\${samtools} index -@ ${task.cpus} lr.hap.unphased.hom_candidates.bam
 
 		python \${extract_reads_py} -t ${a_cpus} -b lr.hap.unphased.hom_candidates.bam -L lr.hap.collapsed.list | \${pigz} -p ${b_cpus} -c > lr.hap.homozygous.fastq.gz
@@ -1277,11 +1337,21 @@ process hapResAsmPolish_getCollapsedHom {
 
 		\${samtools} index -@ ${task.cpus} lr.hap.unphased.het_or_collapsed.bam
 
-		\${samtools} view -@ ${a_cpus2} -b -M -L h1.bed lr.hap.unphased.het_or_collapsed.bam | \
-		\${samtools} bam2fq -@ ${b_cpus2} -n - | \${pigz} -p ${c_cpus2} -c > h1.het_or_collapsed.fastq.gz
+		if [ -s h1.bed ]
+		then
+			\${samtools} view -@ ${a_cpus2} -b -M -L h1.bed lr.hap.unphased.het_or_collapsed.bam | \
+			\${samtools} bam2fq -@ ${b_cpus2} -n - | \${pigz} -p ${c_cpus2} -c > h1.het_or_collapsed.fastq.gz
+		else
+			gzip -c </dev/null > h1.het_or_collapsed.fastq.gz
+		fi
 
-		\${samtools} view -@ ${a_cpus2} -b -M -L h2.bed lr.hap.unphased.het_or_collapsed.bam | \
-		\${samtools} bam2fq -@ ${b_cpus2} -n - | \${pigz} -p ${c_cpus2} -c > h2.het_or_collapsed.fastq.gz
+		if [ -s h2.bed ]
+		then
+			\${samtools} view -@ ${a_cpus2} -b -M -L h2.bed lr.hap.unphased.het_or_collapsed.bam | \
+			\${samtools} bam2fq -@ ${b_cpus2} -n - | \${pigz} -p ${c_cpus2} -c > h2.het_or_collapsed.fastq.gz
+		else
+			gzip -c </dev/null > h2.het_or_collapsed.fastq.gz
+		fi
 		"""			
 }
 
@@ -1451,31 +1521,30 @@ process hapResAsmPolish_polishDualAsm_3 {
 	output:
 		tuple path('H1.fasta'), path('H2.fasta')
 
-	script:
-		"""
-		samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
-		bcftools=\${BCFTOOLS:-${params.tools.bcftools.bin}}
-		seqtk=\${SEQTK:-${params.tools.seqtk.bin}}
+	"""
+	samtools=\${SAMTOOLS:-${params.tools.samtools.bin}}
+	bcftools=\${BCFTOOLS:-${params.tools.bcftools.bin}}
+	seqtk=\${SEQTK:-${params.tools.seqtk.bin}}
 
-		mkdir -p polishing
+	mkdir -p polishing
 
-		cut -f1 ${asm_fai} | \
-		xargs -n1 -P${task.cpus} bash -c \"\
-			contig=\\\$1; \
-			\${samtools} view -b sr.bam \\\$contig > polishing/tmp.\\\$contig.bam; \
-			\${samtools} index polishing/tmp.\\\$contig.bam; \
-			\${seqtk} subseq ${asm_fa} <(echo -e \\"\\\$contig\\") > polishing/tmp.\\\$contig.fasta; \
-			\${bcftools} mpileup -Ou -f ${asm_fa} polishing/tmp.\\\$contig.bam | \${bcftools} call -mv -Ou | \${bcftools} view --exclude 'GT==\\"het\\"' -Oz -o polishing/tmp.\\\$contig.vcf.gz; \
-			tabix -p vcf polishing/tmp.\\\$contig.vcf.gz; \
-			cat polishing/tmp.\\\$contig.fasta | \${bcftools} consensus polishing/tmp.\\\$contig.vcf.gz > polishing/\\\$contig.fasta; \
-			rm -rf polishing/tmp.\\\$contig.*; \
-		\" _
+	cut -f1 ${asm_fai} | \
+	xargs -n1 -P${task.cpus} bash -c \"\
+		contig=\\\$1; \
+		\${samtools} view -b sr.bam \\\$contig > polishing/tmp.\\\$contig.bam; \
+		\${samtools} index polishing/tmp.\\\$contig.bam; \
+		\${seqtk} subseq ${asm_fa} <(echo -e \\"\\\$contig\\") > polishing/tmp.\\\$contig.fasta; \
+		\${bcftools} mpileup -Ou -f ${asm_fa} polishing/tmp.\\\$contig.bam | \${bcftools} call -mv -Ou | \${bcftools} view --exclude 'GT==\\"het\\"' -Oz -o polishing/tmp.\\\$contig.vcf.gz; \
+		tabix -p vcf polishing/tmp.\\\$contig.vcf.gz; \
+		cat polishing/tmp.\\\$contig.fasta | \${bcftools} consensus polishing/tmp.\\\$contig.vcf.gz > polishing/\\\$contig.fasta; \
+		rm -rf polishing/tmp.\\\$contig.*; \
+	\" _
 
-		cat polishing/H1#*.fasta > H1.fasta
-		cat polishing/H2#*.fasta > H2.fasta
+	cat polishing/H1#*.fasta > H1.fasta
+	cat polishing/H2#*.fasta > H2.fasta
 
-		rm -rf polishing/
-		"""
+	rm -rf polishing/
+	"""
 }
 
 workflow {
